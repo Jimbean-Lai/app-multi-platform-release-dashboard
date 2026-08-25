@@ -1,0 +1,28 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+.DS_Store
+
+# 凭证/私钥/密钥（禁止入库）
+**/credentials.json
+**/*.credentials.json
+!config/example.credentials.json
+凭证/
+config/credentials.json
+*.cer
+*.pem
+*.key
+*.p12
+*.jks
+*.rtf
+
+# 华为 agconnect/服务账号等敏感 JSON
+**/*acg*.json
+**/*agc*.json
+**/*service-account*.json
+**/*haiwai*.json
+.venv-setup.log

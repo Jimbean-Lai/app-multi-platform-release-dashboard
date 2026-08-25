@@ -1,0 +1,4 @@
+# 基础无需第三方依赖（Python 标准库即可）
+# Google Play 适配器需要：
+#   pip install "google-api-python-client>=2.100" "google-auth>=2.23" "google-auth-httplib2>=0.1"
+# 或用 pip install -e ".[google]"

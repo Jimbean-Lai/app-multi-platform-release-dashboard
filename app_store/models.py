@@ -1,0 +1,128 @@
+"""统一数据模型：发行清单、提交结果、商店状态。
+
+各商店字段千差万别，这里收敛成几个稳定的 dataclass，
+适配器内部负责与各平台字段互相转换。
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Any, List
+
+
+class Platform(str, Enum):
+    HUAWEI = "huawei"
+    OPPO = "oppo"
+    VIVO = "vivo"
+    XIAOMI = "xiaomi"
+    HONOR = "honor"
+    GOOGLE = "google"
+    APPLE = "apple"
+
+    @property
+    def display_name(self) -> str:
+        return {
+            Platform.HUAWEI: "华为 AppGallery",
+            Platform.OPPO: "OPPO 软件商店",
+            Platform.VIVO: "vivo 应用商店",
+            Platform.XIAOMI: "小米应用商店",
+            Platform.HONOR: "荣耀应用市场",
+            Platform.GOOGLE: "Google Play",
+            Platform.APPLE: "App Store",
+        }[self]
+
+
+class AuditState(str, Enum):
+    """各商店的审核/上架状态统一映射。"""
+
+    DRAFT = "draft"  # 草稿/未提交
+    SUBMITTED = "submitted"  # 已提交
+    REVIEWING = "reviewing"  # 审核中
+    REJECTED = "rejected"  # 被驳回
+    PUBLISHED = "published"  # 已上架
+    UNKNOWN = "unknown"  # 未知/未接入
+
+    @property
+    def display_name(self) -> str:
+        return {
+            AuditState.DRAFT: "草稿",
+            AuditState.SUBMITTED: "已提交",
+            AuditState.REVIEWING: "审核中",
+            AuditState.REJECTED: "被驳回",
+            AuditState.PUBLISHED: "已上架",
+            AuditState.UNKNOWN: "未知",
+        }[self]
+
+
+@dataclass
+class Release:
+    """一次待发布的发行描述（不同商店取各自需要的字段）。"""
+
+    package_name: str
+    version_name: str
+    version_code: int
+    apk_path: str = ""
+    aab_path: str = ""
+    release_notes: str = ""
+    track: str = "production"  # Google Play: production/beta/alpha/internal
+    title: str = ""
+    description: str = ""
+    whatsnew: str = ""  # 各商店的"更新说明"，优先于 release_notes
+    metadata: dict = field(default_factory=dict)
+
+    def artifact_path(self) -> str:
+        return self.aab_path or self.apk_path
+
+
+@dataclass
+class SubmitResult:
+    platform: Platform
+    ok: bool
+    message: str = ""
+    remote_reference: str = ""  # 商店返回的任务/编辑 id
+    state: AuditState = AuditState.UNKNOWN
+    raw: Any = None
+
+    @property
+    def summary(self) -> str:
+        mark = "✔" if self.ok else "✘"
+        text = f"[{self.platform.display_name}] {mark} {self.message}"
+        if self.remote_reference:
+            text += f" (ref={self.remote_reference})"
+        return text
+
+
+@dataclass
+class StoreStatus:
+    platform: Platform
+    package_name: str
+    state: AuditState = AuditState.UNKNOWN
+    live_version_codes: List[int] = field(default_factory=list)
+    live_version_names: List[str] = field(default_factory=list)
+    draft_version_names: List[str] = field(default_factory=list)  # 草稿/未送审
+    reviewing_version_names: List[str] = field(default_factory=list)  # 审核中
+    beta_version_names: List[str] = field(default_factory=list)  # Google beta 轨道
+    alpha_version_names: List[str] = field(default_factory=list)  # Google alpha 轨道
+    internal_version_names: List[str] = field(default_factory=list)  # Google internal 轨道
+    review_message: str = ""
+    checked_at: str = ""
+    raw: Any = None
+
+    @property
+    def summary(self) -> str:
+        versions = ", ".join(self.live_version_names) or ", ".join(str(c) for c in self.live_version_codes)
+        base = f"[{self.platform.display_name}] {self.package_name} —— {self.state.display_name}"
+        if versions:
+            base += f" | 已上架版本: {versions}"
+        if self.draft_version_names:
+            base += f" | 草稿未送审: {', '.join(self.draft_version_names)}"
+        if self.reviewing_version_names:
+            base += f" | 审核中: {', '.join(self.reviewing_version_names)}"
+        if self.review_message:
+            base += f" | {self.review_message}"
+        return base
+
+
+def utcnow_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
