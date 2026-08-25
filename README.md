@@ -73,7 +73,7 @@ pip install -r requirements.txt
 
 ### 3. 配置应用目录
 
-编辑 `apps/catalog.json`，为每个应用配置包名、APK/AAB 路径：
+复制 `apps/catalog.example.json` 为 `apps/catalog.json`，为每个应用配置包名、APK/AAB 路径（本地真实配置不入库）：
 
 ```json
 {
