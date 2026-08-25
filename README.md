@@ -1,5 +1,11 @@
 # App 多平台发布看板（App Multi-Platform Release Dashboard）
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub stars](https://img.shields.io/github/stars/Jimbean-Lai/app-multi-platform-release-dashboard?style=social)](https://github.com/Jimbean-Lai/app-multi-platform-release-dashboard/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/Jimbean-Lai/app-multi-platform-release-dashboard?style=social)](https://github.com/Jimbean-Lai/app-multi-platform-release-dashboard/network)
+
+> ⭐ 如果这个项目对你有帮助，欢迎 **Star** 支持，也欢迎 **Watch** 关注更新、**Fork** 二次开发。
+
 把同一个 App 一键发布到 **华为 AppGallery / OPPO / vivo / 小米 / 荣耀 / Google Play**（+ 苹果只查版本），
 并随时查询**审核进度**与**已上架版本号**。内置 Web 看板，可视化操作。
 
