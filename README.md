@@ -79,16 +79,16 @@ pip install -r requirements.txt
 {
   "categories": [
     {
-      "name": "智能门锁",
+      "name": "示例分类",
       "apps": [
         {
-          "id": "philips-easykey-plus",
-          "name": "Philips EasyKey Plus",
-          "package_name": "com.philips.easykey.lock",
+          "id": "example-app",
+          "name": "Example App",
+          "package_name": "com.example.app",
           "apk_build": "/path/to/app-release.apk",
           "aab_build": "/path/to/app-release.aab",
-          "version_name": "4.6.1",
-          "version_code": null,
+          "version_name": "1.0.0",
+          "version_code": 100,
           "track": "production",
           "release_notes": ""
         }
@@ -119,28 +119,28 @@ appstore web --port 8090 --credentials config/credentials.json --catalog apps/ca
 
 ```bash
 # dry-run 校验（推荐先跑）
-appstore publish --app philips-easykey-plus --platform xiaomi,oppo --dry-run --credentials config/credentials.json
+appstore publish --app example-app --platform xiaomi,oppo --dry-run --credentials config/credentials.json
 
 # 真实发布（勾选多平台：小写平台名逗号分隔）
-appstore publish --app philips-easykey-plus --platform xiaomi,oppo,vivo --credentials config/credentials.json
+appstore publish --app example-app --platform xiaomi,oppo,vivo --credentials config/credentials.json
 
 # 发布到所有已配置平台（不含 Apple）
-appstore publish --app philips-easykey-plus --all --credentials config/credentials.json
+appstore publish --app example-app --all --credentials config/credentials.json
 
 # 指定版本信息覆盖目录配置
-appstore publish --app philips-easykey-plus --platform xiaomi --version-name 4.6.1 --version-code 202608181 --release-notes "修复问题" --credentials config/credentials.json
+appstore publish --app example-app --platform xiaomi --version-name "1.0.1" --version-code 101 --release-notes "修复问题" --credentials config/credentials.json
 
 # 定时上线（小米/OPPO/vivo/荣耀/华为）
-appstore publish --app philips-easykey-plus --platform xiaomi --online-time "2026-09-01 10:00" --credentials config/credentials.json
+appstore publish --app example-app --platform xiaomi --online-time "2026-09-01 10:00" --credentials config/credentials.json
 
 # 查询某 App 所有平台状态
-appstore status --app philips-easykey-plus --credentials config/credentials.json
+appstore status --app example-app --credentials config/credentials.json
 
 # 查询某包名
-appstore status --package com.philips.easykey.lock --credentials config/credentials.json
+appstore status --package com.example.app --credentials config/credentials.json
 
 # JSON 输出（脚本/CI 集成，--json 须在子命令前）
-appstore --json status --app philips-easykey-plus --credentials config/credentials.json
+appstore --json status --app example-app --credentials config/credentials.json
 ```
 
 ## 安全提醒
