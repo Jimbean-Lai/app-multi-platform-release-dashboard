@@ -1,5 +1,5 @@
 {
-  "$comment": "应用分类目录。请按实际应用替换下方示例。可配 aab_build(Google 用) 与 apk_build(国内平台用)。",
+  "$comment": "应用分类目录示例。请复制为 catalog.json 并替换为你的应用信息。可配 aab_build(Google 用) 与 apk_build(国内平台用)。",
   "credentials_file": "config/credentials.json",
   "categories": [
     {
@@ -9,10 +9,10 @@
           "id": "example-app",
           "name": "Example App",
           "package_name": "com.example.app",
-          "apk_build": "",
-          "aab_build": "",
-          "version_name": "",
-          "version_code": null,
+          "apk_build": "/path/to/app-release.apk",
+          "aab_build": "/path/to/app-release.aab",
+          "version_name": "1.0.0",
+          "version_code": 100,
           "track": "production",
           "release_notes": "",
           "notes": "替换为你的应用信息"
