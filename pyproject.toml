@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "app-store-publisher"
+version = "0.1.0"
+description = "一键发布 App 到华为/OPPO/vivo/小米/荣耀/Google，并查询审核进度与已上架版本号"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+google = ["google-api-python-client>=2.100", "google-auth>=2.23", "google-auth-httplib2>=0.1"]
+yaml = ["PyYAML>=6.0"]
+dev = ["pytest>=7"]
+
+[project.scripts]
+appstore = "app_store.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["app_store*"]

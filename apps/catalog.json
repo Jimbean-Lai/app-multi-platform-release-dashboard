@@ -1,0 +1,83 @@
+{
+  "$comment": "应用分类目录。每个应用可配 aab_build(Google 用) 与 apk_build(国内平台用)；version_name/version_code 可留空在发布时填写。",
+  "credentials_file": "config/credentials.json",
+  "categories": [
+    {
+      "name": "智能门锁",
+      "apps": [
+        {
+          "id": "philips-easykey-plus",
+          "name": "Philips EasyKey Plus",
+          "package_name": "com.philips.easykey.lock",
+          "apk_build": "",
+          "version_name": "4.6.1",
+          "version_code": null,
+          "track": "production",
+          "release_notes": "",
+          "notes": "包名已确认；AAB 包待放入构建目录后配置",
+          "aab_build": ""
+        },
+        {
+          "id": "philips-homeaccess",
+          "name": "Philips Homeaccess",
+          "package_name": "com.conex.philips",
+          "aab_build": "",
+          "apk_build": "",
+          "version_name": "",
+          "version_code": null,
+          "track": "production",
+          "release_notes": "",
+          "notes": ""
+        },
+        {
+          "id": "kaadas-smart",
+          "name": "凯迪仕智能 (Kaadas Smart)",
+          "package_name": "com.kaidishi.lock",
+          "aab_build": "",
+          "apk_build": "",
+          "version_name": "",
+          "version_code": null,
+          "track": "production",
+          "release_notes": "",
+          "notes": ""
+        },
+        {
+          "id": "kkhome",
+          "name": "KKhome",
+          "package_name": "com.kkhome.kksecurity",
+          "aab_build": "",
+          "apk_build": "",
+          "version_name": "",
+          "version_code": null,
+          "track": "production",
+          "release_notes": "",
+          "notes": ""
+        },
+        {
+          "id": "motorola-home-secure",
+          "name": "Motorola Home Secure",
+          "package_name": "com.motorola.security",
+          "aab_build": "",
+          "apk_build": "",
+          "version_name": "",
+          "version_code": null,
+          "track": "production",
+          "release_notes": "",
+          "notes": "疑似包名非 Play 商店包名，待确认"
+        },
+        {
+          "id": "teeho",
+          "name": "Teeho",
+          "package_name": "com.teeho.security",
+          "aab_build": "",
+          "apk_build": "",
+          "version_name": "",
+          "version_code": null,
+          "track": "production",
+          "release_notes": "",
+          "notes": "疑似包名非 Play 商店包名，待确认"
+        }
+      ]
+    }
+  ]
+}

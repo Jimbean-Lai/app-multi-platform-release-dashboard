@@ -1,0 +1,13 @@
+{
+  "package_name": "com.example.myapp",
+  "version_name": "1.0.0",
+  "version_code": 100,
+  "aab_path": "build/app-release.aab",
+  "apk_path": "",
+  "track": "production",
+  "title": "示例应用",
+  "description": "这是一个示例应用发布清单",
+  "whatsnew": "首次上架，敬请期待！",
+  "release_notes": "",
+  "metadata": {}
+}
