@@ -108,7 +108,7 @@ var ST={apps:[],cats:[],cur:null,plt:[],POLL:null};
 function $(v){return document.getElementById(v)}
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
 function api(p,o){return fetch(p,o).then(function(r){return r.json().catch(function(){return{}})})}
-function toast(m,t){var e=$("toast");e.style.display="flex";e.innerHTML='<div class="modal" style="width:auto;max-width:400px;text-align:center">'+esc(m)+'<div style="margin-top:12px"><button onclick="closeT()">确定</button></div></div>';e.style.background="transparent";clearTimeout(e._t);e._t=setTimeout(close,2600)}
+function toast(m,t){var e=$("toast");e.style.display="flex";e.innerHTML='<div class="modal" style="width:auto;max-width:400px;text-align:center">'+esc(m)+'<div style="margin-top:12px"><button id=tb>确定</button></div></div>';e.style.background="transparent";clearTimeout(e._t);e._t=setTimeout(close,2600);var b=e.querySelector('#tb');if(b)b.addEventListener('click',close)}
 function close(){ $("toast").style.display="none" }
 function lg(t,c){var e=$("lg");if(e){var d=document.createElement("div");d.className=c||"";d.textContent=t;e.appendChild(d);e.scrollTop=e.scrollHeight}}
 function busy(o){document.querySelectorAll("button,input,select,textarea").forEach(function(b){b.disabled=o})}
