@@ -70,7 +70,7 @@ chmod 600 ~/.config/appstore/google-play-service-account.json
 
 ### 第 6 步：在 Google Play Console 授权（最关键！）
 
-1. 打开 **https://play.google.com/console/** （确保是你发布 Philips EasyKey Plus 的开发者账号）
+1. 打开 **https://play.google.com/console/** （确保是你发布 Example App 的开发者账号）
 2. 左侧菜单 → **设置 Setup** → **API 访问 API access**
 3. 首次进入会看到"关联 Google Cloud 项目"，选择我们在第 2 步创建的项目 → **关联**
 4. 页面底部 "服务账号 Service accounts" 区域会列出刚创建的服务账号，点 **查看链接/授予权限**
@@ -107,10 +107,10 @@ cd /path/to/project
 - 然后执行：
 
 \`\`\`bash
-./.venv/bin/python -B -m app_store.cli status --app philips-easykey-plus --credentials config/credentials.json
+./.venv/bin/python -B -m app_store.cli status --app example-app --credentials config/credentials.json
 \`\`\`
 
-- 如果返回 Philips EasyKey Plus 的审核状态/已上架版本数，说明授权已完成
+- 如果返回 Example App 的审核状态/已上架版本数，说明授权已完成
 - 如果报 403/404，多半是第 6 步授权未完成，或包名与 Play 上不一致。
 
 ---
@@ -120,7 +120,7 @@ cd /path/to/project
 | 现象 | 原因 | 解决 |
 | --- | --- | --- |
 | HttpError 403 ... permission denied | 第 6 步未授权 | 补授权：设置 → API 访问 |
-| 404 找不到应用 | 包名与 Play 上不一致 | 确认 com.philips.easykey.lock |
+| 404 找不到应用 | 包名与 Play 上不一致 | 确认 com.example.app |
 | invalid_grant | 服务账号 JSON 变了/错文件 | 确认读对了下载的 JSON |
 | 找不到"API 访问"菜单 | 非主账号/企业账号权限 | 用开发者主账号登录 Play Console |
 

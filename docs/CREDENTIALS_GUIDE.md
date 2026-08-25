@@ -35,14 +35,14 @@
 | `apple.apps` | 安卓包名 → App Store 数字 App ID 或 bundleId 映射 |
 
 App Store 链接里的数字 ID：`https://apps.apple.com/cn/app/id1234567890` → `1234567890`。
-若无映射，直接用 bundleId（如 `com.philips.easykey.lock`）也能查。
+若无映射，直接用 bundleId（如 `com.example.app`）也能查。
 
 ### 小米应用商店
 
 ```json
 "xiaomi": {
   "apps": {
-    "com.philips.easykey.lock": {
+    "com.example.app": {
       "email": "账号邮箱",
       "password": "账号密码或私钥",
       "public_key": "/绝对路径/dev.api.public.cer"
@@ -99,14 +99,14 @@ App Store 链接里的数字 ID：`https://apps.apple.com/cn/app/id1234567890` �
 - 每个 client 归属于一个项目，只能管理该项目下应用；不同 app 可能需各自建 API 客户端
 - 如果要同时管 Harmony 应用（包名不同、app_id 不同），需对应配置各自 app_id
 
-### 凯迪仕 Harmony 示例（华为）
+### 多应用示例（华为）
 
 ```json
 "huawei": {
   "apps": {
-    "com.philips.easykey.lock": { "client_id": "...1", "client_secret": "...", "app_id": "104355691" },
+    "com.example.app": { "client_id": "...1", "client_secret": "...", "app_id": "100000001" },
     "com.kaidishi.lock":       { "client_id": "...2", "client_secret": "...", "app_id": "100038281" },
-    "com.kaadas.lock":         { "client_id": "...2", "client_secret": "...", "app_id": "5765880207854074875" }
+    "com.example.harmony":         { "client_id": "...2", "client_secret": "...", "app_id": "100000002" }
   }
 }
 ```

@@ -14,8 +14,8 @@
 appstore web --port 8090 --credentials config/credentials.json --catalog apps/catalog.json
 
 # 发布（多选平台）
-appstore publish --app philips-easykey-plus --platform xiaomi,oppo --credentials config/credentials.json
+appstore publish --app example-app --platform xiaomi,oppo --credentials config/credentials.json
 
 # 查询
-appstore status --app philips-easykey-plus --credentials config/credentials.json
+appstore status --app example-app --credentials config/credentials.json
 ```

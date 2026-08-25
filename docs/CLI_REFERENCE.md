@@ -67,7 +67,7 @@ appstore publish [--app APP_ID] [--platform PLATFORM(S)] [--all]
 | `--all` | 发布到 credentials 中所有已配平台（不含 apple） |
 | `--credentials` | 凭证路径（默认 `config/credentials.json`） |
 | `--dry-run` | 仅做本地校验，不发起真实 API 请求 |
-| `--version-name` | 覆盖版本名（如 `4.6.1`） |
+| `--version-name` | 覆盖版本名（如 `1.0.1`） |
 | `--version-code` | 覆盖 versionCode（数字） |
 | `--release-notes` | 更新说明 |
 | `--online-time` | 定时上线（`YYYY-MM-DD HH:MM` 本地时间）；留空=立即 |
@@ -79,19 +79,19 @@ appstore publish [--app APP_ID] [--platform PLATFORM(S)] [--all]
 
 ```bash
 # dry-run 验证（始终推荐先跑）
-appstore publish --app philips-easykey-plus --platform xiaomi,oppo --dry-run
+appstore publish --app example-app --platform xiaomi,oppo --dry-run
 
 # 多平台真实发布
-appstore publish --app philips-easykey-plus --platform xiaomi,oppo,vivo
+appstore publish --app example-app --platform xiaomi,oppo,vivo
 
 # 全部已配平台
-appstore publish --app philips-easykey-plus --all
+appstore publish --app example-app --all
 
 # 定时上线（9月1日10点自动上架）
-appstore publish --app philips-easykey-plus --platform xiaomi --online-time "2026-09-01 10:00"
+appstore publish --app example-app --platform xiaomi --online-time "2026-09-01 10:00"
 
 # JSON 输出
-appstore --json publish --app philips-easykey-plus --all --dry-run
+appstore --json publish --app example-app --all --dry-run
 ```
 
 ### `status`
@@ -114,16 +114,16 @@ appstore status [--app APP_ID | --package PACKAGE]
 
 ```bash
 # 查某 App 所有平台
-appstore status --app philips-easykey-plus
+appstore status --app example-app
 
 # 查某包名
-appstore status --package com.philips.easykey.lock
+appstore status --package com.example.app
 
 # 指定平台
-appstore status --app philips-easykey-plus --platform google
+appstore status --app example-app --platform google
 
 # JSON 输出
-appstore --json status --app philips-easykey-plus
+appstore --json status --app example-app
 ```
 
 ### `web`
