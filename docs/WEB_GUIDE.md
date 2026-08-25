@@ -27,7 +27,7 @@ appstore web --port 8090 --credentials config/credentials.json --catalog apps/ca
 
 1. 左侧选择目标 App → 右侧加载应用信息
 2. 填写/确认：
-   - **版本名**（如 `4.6.1`）
+   - **版本名**（如 `1.0.1`）
    - **versionCode**（留空自动）
    - **勾选发布平台**（可多选，不含 Apple）
    - **更新说明**
@@ -52,7 +52,7 @@ appstore web --port 8090 --credentials config/credentials.json --catalog apps/ca
 POST /api/status
 Content-Type: application/json
 
-{"app_id": "philips-easykey-plus"}
+{"app_id": "example-app"}
 ```
 
 返回：
@@ -60,9 +60,9 @@ Content-Type: application/json
 ```json
 {
   "ok": true,
-  "package": "com.philips.easykey.lock",
+  "package": "com.example.app",
   "statuses": [
-    {"platform": "google", "state": "published", "live_version_names": ["202604101 (4.5.0)"], "draft_version_names": ["202608181 (4.6.1)"], "reviewing_version_names": [], "review_message": "production:草稿未送审"},
+    {"platform": "google", "state": "published", "live_version_names": ["100 (1.0.0)"], "draft_version_names": ["101 (1.0.1)"], "reviewing_version_names": [], "review_message": "production:草稿未送审"},
     {"platform": "xiaomi", "state": "published", "live_version_names": ["4.6.0"]},
     ...
   ]
@@ -79,8 +79,8 @@ Content-Type: application/json
   "app_id": "philps-easykey-plus",
   "platform": "xiaomi,oppo",
   "dry_run": false,
-  "version_name": "4.6.1",
-  "version_code": 202608181,
+  "version_name": "1.0.1",
+  "version_code": 101,
   "release_notes": "修复问题",
   "online_time": "2026-09-01T10:00"
 }
@@ -133,5 +133,5 @@ POST /api/validate
 POST /api/files
 Content-Type: application/json
 
-{"app_id": "philips-easykey-plus"}
+{"app_id": "example-app"}
 ```
