@@ -318,7 +318,9 @@ class Handler(BaseHTTPRequestHandler):
         if platform == "all":
             targets = [k for k in creds if k in PLATFORM_VALUES]
         else:
-            targets = [platform] if platform in creds else [platform]
+            # 支持逗号分隔多选（与发布一致）
+            parts = [p.strip() for p in platform.split(",") if p.strip()]
+            targets = [p for p in parts if p in creds] or [platform]
 
         statuses, errors = [], []
         for key in targets:

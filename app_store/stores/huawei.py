@@ -89,6 +89,28 @@ class HuaweiAdapter(StoreAdapter):
     # ---------- 查询 ----------
     def query_status(self, package_name: str) -> StoreStatus:
         pk = package_name
+        cred = self._cred_for(pk)
+        app_kind = cred.get("app_kind", "android")
+        app_id = cred.get("app_id", "")
+
+        if app_kind == "harmony":
+            # Harmony 应用用 v3 接口（直接按 appId 查）
+            dd = self._get("/api/publish/v3/app-info", {"appId": app_id}, pk)
+            ai = dd.get("appInfo") or {}
+            version = ai.get("onShelfVersionNumber") or ai.get("versionNumber") or ""
+            vcode = ai.get("onShelfVersionCode") or ai.get("versionCode") or 0
+            release_state = ai.get("releaseState")
+            names = [str(version)] if version else []
+            codes = [int(vcode)] if vcode else []
+            state = AuditState.PUBLISHED if names else AuditState.UNKNOWN
+            return StoreStatus(
+                self.platform, package_name, state,
+                live_version_names=names, live_version_codes=codes,
+                review_message=f"releaseState={release_state} (Harmony)",
+                raw=dd, checked_at=utcnow_iso(),
+            )
+
+        # Android：v2 接口（appid-list → app-info）
         d = self._get("/api/publish/v2/appid-list", {"packageName": pk}, pk)
         appids = d.get("appids") or []
         app_id = None
