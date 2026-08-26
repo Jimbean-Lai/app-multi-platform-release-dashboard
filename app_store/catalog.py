@@ -48,6 +48,7 @@ class AppCatalog:
             for app in cat.get("apps", []):
                 item = dict(app)
                 item["category"] = cat["name"]
+                item["category_display"] = cat["name"] if "display_name" not in cat else (cat["display_name"] or "")
                 apps.append(item)
         return apps
 
@@ -177,6 +178,7 @@ class AppCatalog:
             "id": app["id"],
             "name": app.get("name", ""),
             "category": app.get("category", ""),
+            "category_display": app.get("category_display", ""),
             "package_name": app.get("package_name") or "",
             "aab_build": b["aab"],
             "apk_build": b["apk"],
