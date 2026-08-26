@@ -134,7 +134,7 @@ h+='<div class=card><h3>发布</h3>'+
 '<div><label>轨道（Google）</label><select id=ipv><option>production</option><option>beta</option><option>alpha</option><option>internal</option></select></div>'+
 '<div><label>更新说明</label><textarea id=ipn rows=2></textarea><div class=form-group><label>定时上线（留空=立即）</label><input id=pot type=datetime-local></div></div>'+
 '<div class=check><input type=checkbox id=ipdry checked><label for=ipdry>仅校验（dry-run）</label> <input type=checkbox id=ipauto style=margin-left:14px><label for=ipauto>Google 自动送审（不勾=存草稿）</label></div>'+
-'<div class=actions><button onclick=dpub()>发布</button><button class=secondary onclick=ds()>查询状态</button></div></div></div>';
+'<div class=actions>'+(a.query_only?'<button class=secondary disabled title="仅查询应用不支持发布">发布于 AGC 控制台</button>':'<button onclick=dpub()>发布</button>')+'<button class=secondary onclick=ds()>查询状态</button></div></div></div>';
 $("appc").innerHTML=h}
 function row(k,v){return'<div class=row><span class=k>'+esc(k)+'</span><span class=v>'+v+"</span></div>"}
 function clr(x){$(x).value="";pth()}
