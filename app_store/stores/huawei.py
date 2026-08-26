@@ -121,8 +121,9 @@ class HuaweiAdapter(StoreAdapter):
                 h_app_id = hcred.get("app_id") or ""
                 if h_app_id:
                     hs = self._query_harmony(harmony_package, h_app_id)
+                    android_names = [str(n) + "（Android）" for n in s.live_version_names]
                     hnames = [str(n) + "（Harmony）" for n in hs.live_version_names]
-                    s.live_version_names = list(s.live_version_names) + hnames
+                    s.live_version_names = android_names + hnames
                     s.live_version_codes = list(s.live_version_codes) + list(hs.live_version_codes)
                     s.review_message = (s.review_message + "；" if s.review_message else "") + hs.review_message
                     s.raw = {"android": s.raw, "harmony": hs.raw}
