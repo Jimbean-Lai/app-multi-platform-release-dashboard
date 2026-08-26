@@ -87,28 +87,19 @@ class HuaweiAdapter(StoreAdapter):
         return d
 
     # ---------- 查询 ----------
-    def query_status(self, package_name: str) -> StoreStatus:
+    def query_status(self, package_name: str, harmony_package: str = "") -> StoreStatus:
+        """查询华为应用状态。
+
+        harmony_package 非空时（如凯迪仕 Android 应用传入 com.kaadas.lock），
+        同时查询 Android（v2）与 HarmonyOS（v3）版本并合并到同一状态卡片。
+        """
         pk = package_name
         cred = self._cred_for(pk)
         app_kind = cred.get("app_kind", "android")
-        app_id = cred.get("app_id", "")
 
+        # HarmonyOS 应用：直接用 v3 查询
         if app_kind == "harmony":
-            # Harmony 应用用 v3 接口（直接按 appId 查）
-            dd = self._get("/api/publish/v3/app-info", {"appId": app_id}, pk)
-            ai = dd.get("appInfo") or {}
-            version = ai.get("onShelfVersionNumber") or ai.get("versionNumber") or ""
-            vcode = ai.get("onShelfVersionCode") or ai.get("versionCode") or 0
-            release_state = ai.get("releaseState")
-            names = [str(version)] if version else []
-            codes = [int(vcode)] if vcode else []
-            state = AuditState.PUBLISHED if names else AuditState.UNKNOWN
-            return StoreStatus(
-                self.platform, package_name, state,
-                live_version_names=names, live_version_codes=codes,
-                review_message=f"releaseState={release_state} (Harmony)",
-                raw=dd, checked_at=utcnow_iso(),
-            )
+            return self._query_harmony(pk, cred.get("app_id", ""))
 
         # Android：v2 接口（appid-list → app-info）
         d = self._get("/api/publish/v2/appid-list", {"packageName": pk}, pk)
@@ -121,24 +112,58 @@ class HuaweiAdapter(StoreAdapter):
         if not app_id:
             raise StoreError(f"华为未找到 {pk} 的 appId（需先在 AGC 创建应用）")
 
-        dd = self._get("/api/publish/v2/app-info", {"appId": app_id, "lang": "zh-CN"}, pk)
+        s = self._query_android(pk, app_id)
+
+        # 该应用还关联了 Harmony 包名 → 一并查询并合并展示
+        if harmony_package:
+            try:
+                hcred = self._apps.get(harmony_package) or {}
+                h_app_id = hcred.get("app_id") or ""
+                if h_app_id:
+                    hs = self._query_harmony(harmony_package, h_app_id)
+                    hnames = [str(n) + "（Harmony）" for n in hs.live_version_names]
+                    s.live_version_names = list(s.live_version_names) + hnames
+                    s.live_version_codes = list(s.live_version_codes) + list(hs.live_version_codes)
+                    s.review_message = (s.review_message + "；" if s.review_message else "") + hs.review_message
+                    s.raw = {"android": s.raw, "harmony": hs.raw}
+                else:
+                    s.review_message = (s.review_message + "；" if s.review_message else "") + f"Harmony({harmony_package}) 凭证缺 app_id"
+            except StoreError as e:
+                s.review_message = (s.review_message + "；" if s.review_message else "") + f"Harmony 查询失败: {e}"
+        return s
+
+    def _query_android(self, pkg: str, app_id: str) -> StoreStatus:
+        """Android：v2 app-info 查询已上架版本。"""
+        dd = self._get("/api/publish/v2/app-info", {"appId": app_id, "lang": "zh-CN"}, pkg)
         ai = dd.get("appInfo") or {}
         version = ai.get("onShelfVersionNumber") or ai.get("versionNumber") or ""
         vcode = ai.get("onShelfVersionCode") or ai.get("versionCode") or 0
         release_state = ai.get("releaseState")
-
         names = [str(version)] if version else []
         codes = [int(vcode)] if vcode else []
         state = AuditState.PUBLISHED if names else AuditState.UNKNOWN
         return StoreStatus(
-            self.platform,
-            package_name,
-            state,
-            live_version_names=names,
-            live_version_codes=codes,
+            self.platform, pkg, state,
+            live_version_names=names, live_version_codes=codes,
             review_message=f"releaseState={release_state}",
-            raw=dd,
-            checked_at=utcnow_iso(),
+            raw=dd, checked_at=utcnow_iso(),
+        )
+
+    def _query_harmony(self, pkg: str, app_id: str) -> StoreStatus:
+        """HarmonyOS：v3 app-info 直接按 appId 查询。"""
+        dd = self._get("/api/publish/v3/app-info", {"appId": app_id}, pkg)
+        ai = dd.get("appInfo") or {}
+        version = ai.get("onShelfVersionNumber") or ai.get("versionNumber") or ""
+        vcode = ai.get("onShelfVersionCode") or ai.get("versionCode") or 0
+        release_state = ai.get("releaseState")
+        names = [str(version)] if version else []
+        codes = [int(vcode)] if vcode else []
+        state = AuditState.PUBLISHED if names else AuditState.UNKNOWN
+        return StoreStatus(
+            self.platform, pkg, state,
+            live_version_names=names, live_version_codes=codes,
+            review_message=f"releaseState={release_state} (Harmony)",
+            raw=dd, checked_at=utcnow_iso(),
         )
 
     # ---------- 发布 ----------
