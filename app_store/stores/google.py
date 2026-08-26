@@ -208,7 +208,7 @@ class GoogleAdapter(StoreAdapter):
                     .execute()
                 )
                 for b in bundles.get("bundles", []):
-                    if b.get("versionCode") == str(version_code) and b.get("status") == ("ready", ""):
+                    if b.get("versionCode") == str(version_code) and b.get("status") in ("ready", ""):
                         return
                 time.sleep(_PROCESSING_POLL_SECONDS)
                 waited += _PROCESSING_POLL_SECONDS
