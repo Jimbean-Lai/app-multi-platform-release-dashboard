@@ -139,13 +139,14 @@ class GoogleAdapter(StoreAdapter):
             if is_aab and not dry_run:
                 self._wait_processing(service, package, edit_id, version_code)
 
+            auto_review = bool((release.metadata or {}).get("auto_review")) or bool(self.credentials.get("auto_review"))
             track_body = {
                 "track": release.track,
                 "releases": [
                     {
                         "name": f"{version_code} ({release.version_name})" if release.version_name else str(version_code),
                         "versionCodes": [str(version_code)],
-                        "status": "draft" if (dry_run or not self.credentials.get("auto_review")) else "completed",
+                        "status": "draft" if (dry_run or not auto_review) else "completed",
                         "releaseNotes": (
                             [{"language": "zh-CN", "text": release_notes}] if release_notes else []
                         ),
@@ -167,14 +168,12 @@ class GoogleAdapter(StoreAdapter):
                     raw={"edit_id": edit_id, "version_code": version_code, "artifact": str(path)},
                 )
 
-            if self.credentials.get("auto_review"):
+            if auto_review:
                 service.edits().commit(packageName=package, editId=edit_id).execute()
-                auto_review = True
             else:
                 service.edits().commit(
                     packageName=package, editId=edit_id, changesNotSentForReview=True
                 ).execute()
-                auto_review = False
             return SubmitResult(
                 platform=self.platform,
                 ok=True,
