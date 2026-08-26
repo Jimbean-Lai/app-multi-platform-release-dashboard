@@ -127,8 +127,8 @@ h+='<div class=card><h3>构建产物</h3>'+
 '<div class=input-row><input id=papk value="'+esc(a.apk_build||"")+'" placeholder="APK (国内平台)"><button class=sm secondary onclick=fp("apk")>检测</button><button class=sm secondary onclick=clr("papk")>清</button></div>'+
 (a.aab_exists?'<span class=badge style=color:var(--ok)>AAB 存在</span> ':"")+(a.apk_exists?'<span class=badge style=color:var(--ok)>APK 存在</span>':"")+'<div style=margin-top:8px><button onclick=pth()>保存路径</button></div></div>';
 h+='<div class=card><h3>发布</h3>'+
-'<div><label>版本名</label><input id=ipvn placeholder="'+(a.version_name||"4.6.1")+'"></div>'+
-'<div><label>versionCode（留空自动）</label><input id=ipvc type=number placeholder="自动"></div>'+
+'<div><label>版本名</label><input id=ipvn readonly value="'+(a.version_name||"")+'"></div>'+
+'<div><label>versionCode</label><input id=ipvc readonly value="'+(a.version_code==null?"":a.version_code)+'"></div>'+
 '<div><label>发布平台（可多选，Apple 仅查询）</label><div id=ipp style=display:flex;flex-wrap:wrap;gap:8px>'+publishPlatsHTML()+'</div><div style=margin-top:6px><button type=button class=sm secondary onclick=platAll(1)>全选</button> <button type=button class=sm secondary onclick=platAll(0)>清空</button></div></div>'+
 '<div><label>轨道（Google）</label><select id=ipv><option>production</option><option>beta</option><option>alpha</option><option>internal</option></select></div>'+
 '<div><label>更新说明</label><textarea id=ipn rows=2></textarea><div class=form-group><label>定时上线（留空=立即）</label><input id=pot type=datetime-local></div></div>'+
@@ -142,7 +142,7 @@ var h='<div class="overlay" onclick="if(event.target===this)cm()"><div class="mo
 function pick(el){var t=el.dataset.type,p=el.dataset.path;$((t==="aab")?"paab":"papk").value=p;cm();toast("已选: "+p.split("/").pop())}
 function cm(){document.querySelectorAll(".overlay").forEach(function(e){if(e.id!=="toast")e.remove()})}
 function pth(){var a=ST.cur;if(!a)return;var ab=$("paab").value.trim(),ap=$("papk").value.trim();busy(true);api("/api/apps/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({app_id:a.id,aab_build:ab,apk_build:ap})}).then(function(r){if(r.ok){lg("路径已保存","ok");toast("路径已保存")}else{lg("保存失败: "+JSON.stringify(r),"err")}ld()}).finally(function(){busy(false)})}
-function publishPlatsHTML(){var pubs=(ST.platforms||[]).filter(function(p){return p.platform!=="apple"});var labelMap={huawei:"华为",oppo:"OPPO",vivo:"VIVO",xiaomi:"小米",honor:"荣耀",google:"Google Play"};return pubs.map(function(p){var nm=labelMap[p.platform]||p.display_name;var badge=p.availability==="ready"?"":"(骨架)";return '<label class=plat-item><input type=checkbox class=plat-cb value="'+p.platform+'" '+(p.platform==="xiaomi"?"checked":"")+'><span>'+nm+'</span>'+badge+'</label>'}).join("")}
+function publishPlatsHTML(){var pubs=(ST.platforms||[]).filter(function(p){return p.platform!=="apple"});var labelMap={huawei:"华为",oppo:"OPPO",vivo:"VIVO",xiaomi:"小米",honor:"荣耀",google:"Google Play"};return pubs.map(function(p){var nm=labelMap[p.platform]||p.display_name;var badge=p.availability==="ready"?"":"(骨架)";return '<label class=plat-item><input type=checkbox class=plat-cb value="'+p.platform+'" '+""+'><span>'+nm+'</span>'+badge+'</label>'}).join("")}
 function platAll(on){document.querySelectorAll(".plat-cb").forEach(function(c){c.checked=!!on})}
 function selPlats(){var arr=[];document.querySelectorAll(".plat-cb:checked").forEach(function(c){arr.push(c.value)});return arr.length?arr.join(","):"all"}
 function dpub(){var a=ST.cur;if(!a||!a.package_name){toast("请选择应用（需配包名）","err");return}
@@ -155,7 +155,7 @@ var se=$("tsteps");if(t.steps){se.innerHTML=t.steps.map(function(s){return"<div>
 if(t.status==="done"||t.status==="error"){stopPoll();lg("== 结束"+(t.status==="done"?"成功":"有错误")+"==",t.status==="done"?"ok":"err");(t.results||[]).forEach(function(v){lg("["+v.platform+"] "+(v.ok?"OK ":"FAIL ")+v.message,v.ok?"ok":"err")});(t.errors||[]).forEach(function(v){lg("["+v.platform+"] 错误:"+v.error,"err")});busy(false)}else{setTimeout(poll,800)}})}
 function stopPoll(){ST.POLL=null;var b=$("progressbox");if(b)b.classList.add("hide")}
 function ds(){var a=ST.cur;if(!a||!a.package_name){toast("请选择应用","err");return}
-lg("== 查询状态 "+a.name+" ==");busy(true);$("sg").innerHTML="<div class=muted>查询中…</div>";api("/api/status",{method:"POST",headers:{"Content-Type":"statuses"},body:JSON.stringify({app_id:a.id})}).then(function(r){renderStatusGrid(r.statuses||[]);busy(false)}).catch(function(){ $("sg").innerHTML='<div class=muted>查询失败</div>';busy(false)})}
+lg("== 查询状态 "+a.name+" ==");busy(true);$("sg").innerHTML="<div class=muted>查询中…</div>";api("/api/status",{method:"POST",headers:{"Content-Type":"statuses"},body:JSON.stringify({app_id:a.id,platform:selPlats()||"all"})}).then(function(r){renderStatusGrid(r.statuses||[]);busy(false)}).catch(function(){ $("sg").innerHTML='<div class=muted>查询失败</div>';busy(false)})}
 function renderStatusGrid(s){var e=document.getElementById("sg");if(!e)return;if(!s||!s.length){e.innerHTML='<div class=muted>无数据</div>';return}
 var order={huawei:0,oppo:1,vivo:2,xiaomi:3,honor:4,google:5,apple:6}
 var nm={huawei:"华为",oppo:"OPPO",vivo:"VIVO",xiaomi:"小米",honor:"荣耀",google:"Google Play",apple:"Apple"}
