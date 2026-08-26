@@ -348,6 +348,10 @@ class Handler(BaseHTTPRequestHandler):
         app_id = body.get("app_id") or ""
         if not app_id:
             raise StoreError("缺少 app_id")
+        # 仅查询应用不允许发布
+        app = self._catalog().get_app(app_id)
+        if app.get("query_only"):
+            raise StoreError("应用 {id} 标记为仅查询（query_only），不支持发布操作".format(id=app_id))
         platform = (body.get("platform") or "all").lower()
         dry_run = bool(body.get("dry_run"))
         version_name = body.get("version_name") or ""
