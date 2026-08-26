@@ -191,6 +191,7 @@ class AppCatalog:
             "track": app.get("track") or "production",
             "notes": app.get("notes", ""),
             "query_only": bool(app.get("query_only", False)),
+            "huawei_harmony_package": app.get("huawei_harmony_package") or "",
         }
 
 

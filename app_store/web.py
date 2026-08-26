@@ -398,11 +398,17 @@ class Handler(BaseHTTPRequestHandler):
             parts = [p.strip() for p in platform.split(",") if p.strip()]
             targets = [p for p in parts if p in creds] or [platform]
 
+        # 华为：若应用配置了 huawei_harmony_package，查询时同时查 Android + Harmony
+        huawei_harmony_pkg = app.get("huawei_harmony_package") or ""
+
         statuses, errors = [], []
         for key in targets:
             try:
                 adapter = get_adapter(key, creds)
-                s = adapter.query_status(package)
+                if key == "huawei" and huawei_harmony_pkg:
+                    s = adapter.query_status(package, huawei_harmony_pkg)
+                else:
+                    s = adapter.query_status(package)
                 statuses.append({
                     "platform": key, "state": s.state.value,
                     "live_version_codes": s.live_version_codes,
