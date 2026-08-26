@@ -206,6 +206,7 @@ class OPPOAdapter(StoreAdapter):
                            review_message="；".join(msgs),
                            raw=payload, checked_at=utcnow_iso())
 
+    @staticmethod
     def _file_md5(path: str) -> str:
         h = hashlib.md5()
         with open(path, "rb") as f:

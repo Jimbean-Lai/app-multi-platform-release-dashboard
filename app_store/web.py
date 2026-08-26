@@ -291,11 +291,12 @@ class Handler(BaseHTTPRequestHandler):
 
         # 创建异步任务
         tid = _new_task(app_id, platform, dry_run, apk_path=apk_path, aab_path=aab_path)
-        _update(tid, params={
-            "version_name": version_name, "version_code": version_code,
-            "release_notes": release_notes, "track": track,
-            "online_time": online_time,
-        })
+        with _task_lock:
+            _PENDING_PATHS[tid].update({
+                "version_name": version_name, "version_code": version_code,
+                "release_notes": release_notes, "track": track,
+                "online_time": online_time,
+            })
         _step(tid, "任务已创建，后台发布中...")
 
         t = _t.Thread(target=_publish_worker, args=(tid,), daemon=True)

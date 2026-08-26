@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AppStore 发布看板</title>
 <style>
-:root{--bg:#0f172a;--panel:#1e293b;--panel2:#22nope;--panel2:#294061;--line:#3b4a63;--txt:#e2e8f0;--mut:#94a3b8;--acc:#38bdf8;--ok:#4ade80;--err:#f87171;--warn:#fbbf24}
+:root{--bg:#0f172a;--panel:#1e293b;--panel2:#294061;--line:#3b4a63;--txt:#e2e8f0;--mut:#94a3b8;--acc:#38bdf8;--ok:#4ade80;--err:#f87171;--warn:#fbbf24}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;display:flex;flex-direction:column}
@@ -153,9 +153,9 @@ function poll(){if(!ST.POLL)return;api("/api/tasks/"+ST.POLL).then(function(t){i
 var a=(ST.apps||[]).find(function(z){return z.id===t.app_id})||{};$("tinfo").textContent=esc(a.name||t.app_id)+" → "+t.platform+(t.dry_run?" (dry-run)":"");$("tstage").textContent=t.stage||"";$("tfill").style.width=(t.progress||0)+"%";
 var se=$("tsteps");if(t.steps){se.innerHTML=t.steps.map(function(s){return"<div>"+esc(s)+"</div>"}).join("");se.scrollTop=se.scrollHeight}
 if(t.status==="done"||t.status==="error"){stopPoll();lg("== 结束"+(t.status==="done"?"成功":"有错误")+"==",t.status==="done"?"ok":"err");(t.results||[]).forEach(function(v){lg("["+v.platform+"] "+(v.ok?"OK ":"FAIL ")+v.message,v.ok?"ok":"err")});(t.errors||[]).forEach(function(v){lg("["+v.platform+"] 错误:"+v.error,"err")});busy(false)}else{setTimeout(poll,800)}})}
-function stopPoll(){ST.POLL=null;var b=$("progressbox");if(b)b.classList.add("hide")}
+function stopPoll(){ST.POLL=null;var b=$("progress");if(b)b.classList.add("hide")}
 function ds(){var a=ST.cur;if(!a||!a.package_name){toast("请选择应用","err");return}
-lg("== 查询状态 "+a.name+" ==");busy(true);$("sg").innerHTML="<div class=muted>查询中…</div>";api("/api/status",{method:"POST",headers:{"Content-Type":"statuses"},body:JSON.stringify({app_id:a.id,platform:selPlats()||"all"})}).then(function(r){renderStatusGrid(r.statuses||[]);busy(false)}).catch(function(){ $("sg").innerHTML='<div class=muted>查询失败</div>';busy(false)})}
+lg("== 查询状态 "+a.name+" ==");busy(true);$("sg").innerHTML="<div class=muted>查询中…</div>";api("/api/status",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({app_id:a.id,platform:selPlats()||"all"})}).then(function(r){renderStatusGrid(r.statuses||[]);busy(false)}).catch(function(){ $("sg").innerHTML='<div class=muted>查询失败</div>';busy(false)})}
 function renderStatusGrid(s){var e=document.getElementById("sg");if(!e)return;if(!s||!s.length){e.innerHTML='<div class=muted>无数据</div>';return}
 var order={huawei:0,oppo:1,vivo:2,xiaomi:3,honor:4,google:5,apple:6}
 var nm={huawei:"华为",oppo:"OPPO",vivo:"VIVO",xiaomi:"小米",honor:"荣耀",google:"Google Play",apple:"Apple"}
