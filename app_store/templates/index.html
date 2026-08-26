@@ -98,6 +98,7 @@ label{display:block;color:var(--mut);font-size:11px;margin:8px 0 3px}
     </div></div>
     <div class=scroll>
       <div><h3 style=color:var(--acc);font-size:14px;margin-bottom:8px>平台状态</h3><div id=sg class=status-grid><div class=muted>点击「查询状态」查看</div></div></div>
+      <div><h3 style=color:var(--acc);font-size:14px;margin-bottom:8px>发布历史</h3><div id=sh><div class=muted>暂无发布记录</div></div></div>
       <div><h3 style=color:var(--acc);font-size:14px;margin-bottom:8px>日志</h3><div id=lg class=result><div>就绪</div></div></div>
     </div>
   </main>
@@ -113,7 +114,7 @@ function close(){ $("toast").style.display="none" }
 function lg(t,c){var e=$("lg");if(e){var d=document.createElement("div");d.className=c||"";d.textContent=t;e.appendChild(d);e.scrollTop=e.scrollHeight}}
 function busy(o){document.querySelectorAll("button,input,select,textarea").forEach(function(b){b.disabled=o})}
 function stat(ch){var m={published:"已上架",reviewing:"审核中",draft:"草稿",submitted:"已提交",rejected:"被驳回",unknown:"未知"};return m[ch]||ch}
-function ld(){Promise.all([api("/api/apps"),api("/api/platforms"),api("/api/config")]).then(function(rs){ST.apps=rs[0].apps||[];ST.cats=rs[0].categories||[];ST.platforms=rs[1]||[];$("cfg").textContent="凭证: "+(rs[2].credentials||"");renderSb();if(ST.apps.length){if(!ST.cur||!ST.apps.find(function(a){return a.id===ST.cur.id}))sa(ST.apps[0].id);else rm()}}).catch(function(e){console.error(e)})}
+function ld(){Promise.all([api("/api/apps"),api("/api/platforms"),api("/api/config"),api("/api/tasks")]).then(function(rs){ST.apps=rs[0].apps||[];ST.cats=rs[0].categories||[];ST.platforms=rs[1]||[];$("cfg").textContent="凭证: "+(rs[2].credentials||"");renderSb();if(ST.apps.length){if(!ST.cur||!ST.apps.find(function(a){return a.id===ST.cur.id}))sa(ST.apps[0].id);else renderMain()}var hist=(rs[3]&&rs[3].history)||[];renderHistory(hist.slice(0,8))}).catch(function(e){console.error(e)})}
 function renderSb(){var h="";(ST.cats||[]).forEach(function(c){h+='<div class=cat-title>'+esc(c.name)+"</div>";(ST.apps||[]).filter(function(a){return a.category===c.name}).forEach(function(a){var act=ST.cur&&ST.cur.id===a.id?"active":"";var dot=a.package_name?'<span class=dot style=background:var(--ok)></span>':'<span class=dot style=background:var(--warn)></span>';h+='<div class="app-item '+act+'" data-id="'+esc(a.id)+'" onclick="sa(this.dataset.id)">'+dot+'<span>'+esc(a.name)+"</span></div>"})});$("sb").innerHTML=h}
 function sa(id){ST.cur=(ST.apps||[]).find(function(a){return a.id===id})||null;renderSb();renderMain()}
 function renderMain(){if(!ST.platforms&&!ST.apps.length){setTimeout(renderMain,250);return}var a=ST.cur;if(!a){$("appc").innerHTML='<div class=muted>请选择左侧应用</div>';return}
@@ -132,21 +133,29 @@ h+='<div class=card><h3>发布</h3>'+
 '<div><label>发布平台（可多选，Apple 仅查询）</label><div id=ipp style=display:flex;flex-wrap:wrap;gap:8px>'+publishPlatsHTML()+'</div><div style=margin-top:6px><button type=button class=sm secondary onclick=platAll(1)>全选</button> <button type=button class=sm secondary onclick=platAll(0)>清空</button></div></div>'+
 '<div><label>轨道（Google）</label><select id=ipv><option>production</option><option>beta</option><option>alpha</option><option>internal</option></select></div>'+
 '<div><label>更新说明</label><textarea id=ipn rows=2></textarea><div class=form-group><label>定时上线（留空=立即）</label><input id=pot type=datetime-local></div></div>'+
-'<div class=check><input type=checkbox id=ipdry checked><label for=ipdry>仅校验（dry-run）</label></div>'+
+'<div class=check><input type=checkbox id=ipdry checked><label for=ipdry>仅校验（dry-run）</label> <input type=checkbox id=ipauto style=margin-left:14px><label for=ipauto>Google 自动送审（不勾=存草稿）</label></div>'+
 '<div class=actions><button onclick=dpub()>发布</button><button class=secondary onclick=ds()>查询状态</button></div></div></div>';
 $("appc").innerHTML=h}
 function row(k,v){return'<div class=row><span class=k>'+esc(k)+'</span><span class=v>'+v+"</span></div>"}
 function clr(x){$(x).value="";pth()}
 function fp(t){var a=ST.cur;if(!a)return;api("/api/files").then(function(f){var l=(f&&f[t])||[];if(!l.length){toast("未检测到"+t.toUpperCase()+"文件","err");return}
 var h='<div class="overlay" onclick="if(event.target===this)cm()"><div class="modal"><h3 style=margin-bottom:8px>选择 '+t.toUpperCase()+" 文件</h3>";(l||[]).forEach(function(x){var z=x.size>1e6?(x.size/1e6).toFixed(1)+" MB":Math.max(1,Math.round(x.size/1e3))+" KB";h+='<div class="file-item" data-type="'+t+'" data-path="'+esc(x.path)+'" onclick="pick(this)"><span class=fname>'+esc(x.name)+'</span><span class=muted>'+z+"</span></div>"});h+='<div style=margin-top:10px;text-align:right><button class=secondary onclick=cm()>取消</button></div></div></div>';var d=document.createElement("div");d.innerHTML=h;document.body.appendChild(d.firstElementChild)})}
-function pick(el){var t=el.dataset.type,p=el.dataset.path;$((t==="aab")?"paab":"papk").value=p;cm();toast("已选: "+p.split("/").pop())}
+function pick(el){var t=el.dataset.type,p=el.dataset.path;var inp=$(t==="aab"?"paab":"papk");inp.value=p;cm();toast("已选: "+p.split("/").pop());if(t==="apk"&&ST.cur)autoMeta(p,ST.cur.id)}
 function cm(){document.querySelectorAll(".overlay").forEach(function(e){if(e.id!=="toast")e.remove()})}
-function pth(){var a=ST.cur;if(!a)return;var ab=$("paab").value.trim(),ap=$("papk").value.trim();busy(true);api("/api/apps/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({app_id:a.id,aab_build:ab,apk_build:ap})}).then(function(r){if(r.ok){lg("路径已保存","ok");toast("路径已保存")}else{lg("保存失败: "+JSON.stringify(r),"err")}ld()}).finally(function(){busy(false)})}
+function pth(){var a=ST.cur;if(!a)return;var ab=$("paab").value.trim(),ap=$("papk").value.trim();busy(true);api("/api/apps/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({app_id:a.id,aab_build:ab,apk_build:ap})}).then(function(r){if(r.ok){lg("路径已保存","ok");toast("路径已保存");if(ap&&!r.error)autoMeta(ap,a.id)}else{lg("保存失败: "+JSON.stringify(r),"err")}}).finally(function(){busy(false)})}
 function publishPlatsHTML(){var pubs=(ST.platforms||[]).filter(function(p){return p.platform!=="apple"});var labelMap={huawei:"华为",oppo:"OPPO",vivo:"VIVO",xiaomi:"小米",honor:"荣耀",google:"Google Play"};return pubs.map(function(p){var nm=labelMap[p.platform]||p.display_name;var badge=p.availability==="ready"?"":"(骨架)";return '<label class=plat-item><input type=checkbox class=plat-cb value="'+p.platform+'" '+""+'><span>'+nm+'</span>'+badge+'</label>'}).join("")}
 function platAll(on){document.querySelectorAll(".plat-cb").forEach(function(c){c.checked=!!on})}
 function selPlats(){var arr=[];document.querySelectorAll(".plat-cb:checked").forEach(function(c){arr.push(c.value)});return arr.length?arr.join(","):"all"}
+function autoMeta(path,appId){api("/api/apk/meta",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:path})}).then(function(r){if(!r.ok){lg("APK解析: "+(r.error||"失败"),"err");return}
+var a=ST.cur;var msg="";
+if(a&&r.package_name&&a.package_name&&r.package_name!==a.package_name){msg="⚠️ 包名不一致! APK="+r.package_name+" vs 配置="+a.package_name;lg(msg,"err");var al=$("papkAlert");if(al)al.textContent=msg}
+if(a&&r.package_name&&a.package_name&&r.package_name===a.package_name){lg("APK 包名一致: "+r.package_name,"ok")}
+if($("ipvn"))$("ipvn").value=r.version_name||"";
+if($("ipvc"))$("ipvc").value=(r.version_code==null?"":r.version_code);
+if(r.version_name||r.version_code!=null){var fields={app_id:appId};if(r.version_name)fields.version_name=r.version_name;if(r.version_code!=null)fields.version_code=r.version_code;api("/api/apps/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(fields)}).then(function(){lg("已自动保存版本: "+r.version_name+" / "+r.version_code,"ok");if(ST.cur&&ST.cur.id===appId){ST.cur.version_name=r.version_name;ST.cur.version_code=r.version_code;renderMain()}})}
+})}
 function dpub(){var a=ST.cur;if(!a||!a.package_name){toast("请选择应用（需配包名）","err");return}
-var body={app_id:a.id,platform:selPlats(),dry_run:$("ipdry").checked,version_name:$("ipvn").value.trim(),version_code:parseInt($("ipvc").value)||null,release_notes:$("ipn").value.trim(),track:$("ipv").value,aab_path:$("paab").value.trim(),apk_path:$("papk").value.trim(),online_time:document.getElementById("pot")?document.getElementById("pot").value.trim():""};
+var body={app_id:a.id,platform:selPlats(),dry_run:$("ipdry").checked,auto_review:$("ipauto").checked,version_name:$("ipvn").value.trim(),version_code:parseInt($("ipvc").value)||null,release_notes:$("ipn").value.trim(),track:$("ipv").value,aab_path:$("paab").value.trim(),apk_path:$("papk").value.trim(),online_time:document.getElementById("pot")?document.getElementById("pot").value.trim():""};
 lg("== "+(body.dry_run?"Dry-run":"正式")+"发布 "+(a.name||a.id)+" ==");busy(true);api("/api/publish",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(function(r){if(r.task_id){lg("任务: "+r.task_id);startPoll(r.task_id)}else{lg("启动失败: "+JSON.stringify(r),"err");busy(false)}})}
 function startPoll(tid){ST.POLL=tid;$("progress").classList.remove("hide");poll()}
 function poll(){if(!ST.POLL)return;api("/api/tasks/"+ST.POLL).then(function(t){if(t.error){lg("查询失败","err");stopPoll();return}
@@ -161,6 +170,8 @@ var order={huawei:0,oppo:1,vivo:2,xiaomi:3,honor:4,google:5,apple:6}
 var nm={huawei:"华为",oppo:"OPPO",vivo:"VIVO",xiaomi:"小米",honor:"荣耀",google:"Google Play",apple:"Apple"}
 var list=(s||[]).slice().sort(function(a,b){return (order[a.platform]!==undefined?order[a.platform]:99)-(order[b.platform]!==undefined?order[b.platform]:99)});
 var h="";list.forEach(function(x){var live=(x.live_version_names||[]).join(", ")||(x.live_version_codes||[]).join(",")||"-";var rev=(x.reviewing_version_names||[]).join(", ");var draft=(x.draft_version_names||[]).join(", ");var beta=(x.beta_version_names||[]).join(", ");var alpha=(x.alpha_version_names||[]).join(", ");var inter=(x.internal_version_names||[]).join(", ");var tst=[];if(beta)tst.push("Beta:"+beta);if(alpha)tst.push("Alpha:"+alpha);if(inter)tst.push("内测:"+inter);var tstRow=tst.join(" ；");h+='<div class=card><div style="display:flex;justify-content:space-between;margin-bottom:6px;align-items:center"><b style="font-size:12px">'+esc(nm[x.platform]||x.platform)+'</b><span class="state '+x.state+'">'+stat(x.state)+'</span></div>'+row("已上架版本",esc(live))+row("审核状态",rev?esc(rev):(x.state==="reviewing"?"审核中":"-"))+row("草稿未送审",draft?esc(draft):"-")+(tstRow?row("内测版本",esc(tstRow)):"")+'</div>'});e.innerHTML=h}
+function renderHistory(hist){var e=document.getElementById("sh");if(!e)return;if(!hist||!hist.length){e.innerHTML='<div class=muted>暂无发布记录</div>';return}
+var h="";(hist||[]).forEach(function(t){var st=t.status==="done"?"ok":"err";var dn=(t.dry_run?" (dry-run)":"");h+='<div class="card" style="padding:8px 12px;margin-bottom:6px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-size:12px">'+esc(t.finished_at||"")+' · <b>'+esc(t.app_id)+'</b> → '+esc(t.platform||"")+dn+'</span><span class="state '+st+'">'+(t.status==="done"?"完成":"失败")+'</span></div><div style="font-size:11px;color:var(--mut);margin-top:3px">'+(t.stage||"")+"</div></div>"});e.innerHTML=h}
 function validateAll(){lg("== 校验凭证 ==");api("/api/validate").then(function(r){(r.validated||[]).forEach(function(x){lg("["+x.platform+"] "+(x.ok?"OK":"ERROR")+(x.message?" "+x.message:""),x.ok?"ok":"err")})})}
 ld();
 </script>

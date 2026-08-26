@@ -28,4 +28,7 @@ config/credentials.json
 
 # 本地应用目录（含真实包名/路径），GitHub 用 catalog.example.json
 apps/catalog.json
+
+# 自动生成的发布任务历史（每次重启覆盖，不入库）
+config/tasks_history.json*
 .venv-setup.log

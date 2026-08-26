@@ -13,12 +13,14 @@ API：
 from __future__ import annotations
 
 import json
+import os
 import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, List
 from urllib.parse import urlparse
 
+from .apk_meta import parse_apk
 from .base import StoreError
 from .catalog import get_catalog
 from .config import load_credentials
@@ -30,6 +32,10 @@ PLATFORM_VALUES = {p.value for p in Platform}
 PUBLISH_PLATFORMS = {p for p in PLATFORM_VALUES if p != "apple"}
 
 _lock = threading.Lock()
+
+# ---- 任务持久化 ----
+_HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config", "tasks_history.json")
+_HISTORY_MAX = 50
 
 import os as _os
 
@@ -91,6 +97,48 @@ _TASKS: dict = {}
 _PENDING_PATHS: dict = {}
 
 
+def _history_path():
+    p = _os.path.abspath(_HISTORY_FILE)
+    _os.makedirs(_os.path.dirname(p), exist_ok=True)
+    return p
+
+
+def _load_history():
+    """启动时把 config/tasks_history.json 里的历史任务加载进 _TASKS（供前端展示）。"""
+    try:
+        with open(_history_path(), "r", encoding="utf-8") as f:
+            items = json.load(f)
+    except Exception:
+        return
+    if not isinstance(items, list):
+        return
+    with _task_lock:
+        for it in items:
+            if not isinstance(it, dict) or not it.get("id"):
+                continue
+            tid = it["id"]
+            if tid not in _TASKS:
+                _TASKS[tid] = it
+
+
+def _save_history():
+    """把最近的稳定任务（done/error/已取消）写盘，最多保留 _HISTORY_MAX 条。"""
+    try:
+        with _task_lock:
+            stable = [
+                v for v in _TASKS.values()
+                if v.get("status") in ("done", "error", "killed")
+            ]
+            stable.sort(key=lambda x: x.get("finished_at", ""), reverse=True)
+            items = stable[:_HISTORY_MAX]
+        tmp = _history_path() + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(items, f, ensure_ascii=False, indent=1)
+        _os.replace(tmp, _history_path())
+    except Exception:
+        pass
+
+
 def _new_task(app_id, platform, dry_run, apk_path="", aab_path=""):
     tid = _u.uuid4().hex[:12]
     with _task_lock:
@@ -114,6 +162,12 @@ def _update(tid, **kw):
     with _task_lock:
         if tid in _TASKS:
             _TASKS[tid].update(kw)
+            if kw.get("status") in ("done", "error", "killed"):
+                if not _TASKS[tid].get("finished_at"):
+                    _TASKS[tid]["finished_at"] = _tm.strftime("%Y-%m-%d %H:%M:%S")
+    # _save_history 有自己的锁，在外部调用避免死锁
+    if kw.get("status") in ("done", "error", "killed"):
+        _save_history()
 
 
 def _publish_worker(tid: str):
@@ -142,6 +196,7 @@ def _publish_worker(tid: str):
             aab_path=params.get("aab", ""),
             online_time=params.get("online_time"),
         )
+        release.metadata["auto_review"] = bool(params.get("auto_review"))
         _step(tid, f"包名: {release.package_name} v{release.version_name or '?'}")
         _update(tid, progress=8, stage="读取配置")
         if platform == "all":
@@ -223,7 +278,11 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/tasks":
                 with _task_lock:
                     running = {k: v for k, v in _TASKS.items() if v.get("status") in ("running",)}
-                return _json_response(self, {"running": list(running.values())})
+                    history = [
+                        v for k, v in _TASKS.items() if v.get("status") in ("done", "error", "killed")
+                    ]
+                history.sort(key=lambda x: x.get("finished_at", ""), reverse=True)
+                return _json_response(self, {"running": list(running.values()), "history": history[:_HISTORY_MAX]})
             return _json_response(self, {"error": "not found"}, 404)
         except Exception as e:
             return _json_response(self, {"error": str(e)}, 500)
@@ -239,6 +298,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._api_status(body)
             if path == "/api/apps/update":
                 return self._api_update_app(body)
+            if path == "/api/apk/meta":
+                return self._api_apk_meta(body)
             return _json_response(self, {"error": "not found"}, 404)
         except StoreError as e:
             return _json_response(self, {"ok": False, "error": str(e)}, 400)
@@ -275,6 +336,14 @@ class Handler(BaseHTTPRequestHandler):
         catalog.update_app(app_id, fields)
         return _json_response(self, {"ok": True, "app": catalog.status_payload(app_id)})
 
+    def _api_apk_meta(self, body: Dict[str, Any]):
+        """解析 APK 元数据（package/versionName/versionCode/label）。"""
+        path = body.get("path") or ""
+        if not path:
+            raise StoreError("缺少 path")
+        info = parse_apk(path)
+        return _json_response(self, {"ok": True, **info})
+
     def _api_publish(self, body: Dict[str, Any]):
         app_id = body.get("app_id") or ""
         if not app_id:
@@ -288,6 +357,7 @@ class Handler(BaseHTTPRequestHandler):
         apk_path = body.get("apk_path") or ""
         aab_path = body.get("aab_path") or ""
         online_time = body.get("online_time") or None
+        auto_review = bool(body.get("auto_review"))
 
         # 创建异步任务
         tid = _new_task(app_id, platform, dry_run, apk_path=apk_path, aab_path=aab_path)
@@ -296,6 +366,7 @@ class Handler(BaseHTTPRequestHandler):
                 "version_name": version_name, "version_code": version_code,
                 "release_notes": release_notes, "track": track,
                 "online_time": online_time,
+                "auto_review": auto_review,
             })
         _step(tid, "任务已创建，后台发布中...")
 
@@ -354,6 +425,7 @@ def run_server(
 ) -> int:
     Handler.credentials_path = credentials_path
     Handler.catalog_path = catalog_path
+    _load_history()
     httpd = ThreadingHTTPServer((host, port), Handler)
     url = f"http://{host}:{port}/"
     print(f"🖥  AppStore 发布看板已启动: {url}")
