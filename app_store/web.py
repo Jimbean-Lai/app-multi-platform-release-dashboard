@@ -302,6 +302,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._api_update_app(body)
             if path == "/api/apk/meta":
                 return self._api_apk_meta(body)
+            if path == "/api/tasks/clear":
+                return self._api_tasks_clear()
             return _json_response(self, {"error": "not found"}, 404)
         except StoreError as e:
             return _json_response(self, {"ok": False, "error": str(e)}, 400)
@@ -345,6 +347,23 @@ class Handler(BaseHTTPRequestHandler):
             raise StoreError("缺少 path")
         info = parse_build(path)
         return _json_response(self, {"ok": True, **info})
+
+    def _api_tasks_clear(self):
+        """清空发布历史：删除落盘文件 + 清理内存中的稳定任务。"""
+        # 删除落盘历史文件
+        try:
+            if os.path.isfile(_HISTORY_FILE):
+                os.remove(_HISTORY_FILE)
+        except Exception:
+            pass
+        # 清理内存：只保留运行中的任务
+        with _task_lock:
+            keep = {k: v for k, v in _TASKS.items() if v.get("status") == "running"}
+            for k in list(_TASKS.keys()):
+                if k not in keep:
+                    _TASKS.pop(k, None)
+                    _PENDING_PATHS.pop(k, None)
+        return _json_response(self, {"ok": True, "cleared": True})
 
     def _api_publish(self, body: Dict[str, Any]):
         app_id = body.get("app_id") or ""
