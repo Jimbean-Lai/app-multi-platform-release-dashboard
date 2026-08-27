@@ -112,7 +112,7 @@ label{display:block;color:var(--mut);font-size:11px;margin:8px 0 3px}
     </div></div>
     <div class=scroll>
       <div><h3 style=color:var(--acc);font-size:14px;margin-bottom:8px>平台状态</h3><div id=sg class=status-grid><div class=muted>点击「查询状态」查看</div></div></div>
-      <div><h3 style=color:var(--acc);font-size:14px;margin-bottom:8px>发布历史</h3><div id=sh><div class=muted>暂无发布记录</div></div></div>
+      <div><div style=display:flex;justify-content:space-between;align-items:center;margin-bottom:8px><h3 style=color:var(--acc);font-size:14px;margin:0>发布历史</h3><button class="secondary sm" onclick=clearHistory()>清空</button></div><div id=sh><div class=muted>暂无发布记录</div></div></div>
       <div><h3 style=color:var(--acc);font-size:14px;margin-bottom:8px>日志</h3><div id=lg class=result><div>就绪</div></div></div>
     </div>
   </main>
@@ -236,6 +236,9 @@ var rev=(x.reviewing_version_names||[]).join(", ");var draft=(x.draft_version_na
 e.innerHTML=h}
 function renderHistory(hist){var e=document.getElementById("sh");if(!e)return;if(!hist||!hist.length){e.innerHTML='<div class=muted>暂无发布记录</div>';return}
 var h="";(hist||[]).forEach(function(t){var st=t.status==="done"?"ok":"err";var dn=(t.dry_run?" (dry-run)":"");h+='<div class="card" style="padding:8px 12px;margin-bottom:6px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-size:12px">'+esc(t.finished_at||"")+' · <b>'+esc(t.app_id)+'</b> → '+esc(t.platform||"")+dn+'</span><span class="state '+st+'">'+(t.status==="done"?"完成":"失败")+'</span></div><div style="font-size:11px;color:var(--mut);margin-top:3px">'+(t.stage||"")+"</div></div>"});e.innerHTML=h}
+function clearHistory(){var h='<div class="overlay" onclick="if(event.target===this)clh()"><div class="modal" style="text-align:center;min-width:340px"><p style="margin:8px 0 14px;font-size:15px;font-weight:600">确认清空全部发布历史？</p><p style="color:var(--mut);font-size:13px;margin-bottom:20px">此操作不可撤消，历史记录将被永久删除。</p><div style="display:flex;gap:10px;justify-content:center"><button onclick=doClearHistory() style="background:var(--err)">确认清空</button><button class=secondary onclick=clh()>取消</button></div></div></div>';var d=document.createElement("div");d.innerHTML=h;document.body.appendChild(d.firstElementChild)}
+function doClearHistory(){api("/api/tasks/clear",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}).then(function(r){clh();if(r&&r.ok){lg("发布历史已清空","ok");var e=document.getElementById("sh");if(e)e.innerHTML='<div class=muted>暂无发布记录</div>'}else{lg("清空失败: "+JSON.stringify(r),"err")}})}
+function clh(){document.querySelectorAll(".overlay").forEach(function(e){if(e.id!=="toast")e.remove()})}
 function validateAll(){lg("== 校验凭证 ==");api("/api/validate").then(function(r){(r.validated||[]).forEach(function(x){lg("["+x.platform+"] "+(x.ok?"OK":"ERROR")+(x.message?" "+x.message:""),x.ok?"ok":"err")})})}
 ld();
 </script>
