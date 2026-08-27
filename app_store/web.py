@@ -20,7 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, List
 from urllib.parse import urlparse
 
-from .apk_meta import parse_apk
+from .apk_meta import parse_build, parse_apk
 from .base import StoreError
 from .catalog import get_catalog
 from .config import load_credentials
@@ -343,7 +343,7 @@ class Handler(BaseHTTPRequestHandler):
         path = body.get("path") or ""
         if not path:
             raise StoreError("缺少 path")
-        info = parse_apk(path)
+        info = parse_build(path)
         return _json_response(self, {"ok": True, **info})
 
     def _api_publish(self, body: Dict[str, Any]):
@@ -364,6 +364,22 @@ class Handler(BaseHTTPRequestHandler):
         aab_path = body.get("aab_path") or ""
         online_time = body.get("online_time") or None
         auto_review = bool(body.get("auto_review"))
+
+        # 前置校验：APK/AAB 包名必须与应用目录中的 package_name 一致
+        for label, p in (("AAB", aab_path), ("APK", apk_path)):
+            if not p:
+                continue
+            try:
+                meta = parse_build(p)
+            except StoreError as e:
+                raise StoreError(f"{label} 解析失败: {e}")
+            real = meta.get("package_name") or ""
+            expected = app.get("package_name") or ""
+            if expected and real and real != expected:
+                raise StoreError(
+                    f"安装包包名与当前应用不一致！{label} 内包名={real}，"
+                    f"应用 {app_id} 配置包名={expected}。请选择正确的安装包"
+                )
 
         # 创建异步任务
         tid = _new_task(app_id, platform, dry_run, apk_path=apk_path, aab_path=aab_path)
