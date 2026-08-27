@@ -67,6 +67,8 @@ label{display:block;color:var(--mut);font-size:11px;margin:8px 0 3px}
 #tbar .fill::after{content:'';position:absolute;top:0;left:10%;right:10%;height:50%;background:rgba(255,255,255,.15);border-radius:10px 10px 0 0}
 #tbar .fill.ok{background:linear-gradient(90deg,#22c55e,#4ade80)}
 #tbar .fill.err{background:linear-gradient(90deg,#ef4444,#f87171)}
+#tbar.shimmer .fill{background-image:linear-gradient(90deg,var(--acc),#22d3ee,#38bdf8,var(--acc));background-size:200% 100%;animation:shimmer 2s linear infinite}
+@keyframes shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
 #tsteps{font-size:12px;max-height:130px;overflow-y:auto;margin-top:8px;color:var(--txt)}
 #tsteps div{padding:2px 0;display:flex;align-items:center;gap:6px}
 #tsteps div .icn{font-size:14px;flex-shrink:0}
@@ -173,29 +175,42 @@ function startPoll(tid){ST.POLL=tid;$("progress").classList.remove("hide");$("tf
 function poll(){if(!ST.POLL)return;api("/api/tasks/"+ST.POLL).then(function(t){if(t.error){lg("查询失败","err");stopPoll();return}
 var a=(ST.apps||[]).find(function(z){return z.id===t.app_id})||{};
 $("tinfo").textContent=esc(a.name||t.app_id)+" → "+esc(t.platform)+(t.dry_run?" ⚡dry-run":"");
-// 平台进度芯片
-var ps=[];(t.results||[]).forEach(function(v){ps.push('<span class="tchip ok">'+v.platform+' ✓</span>')});
-(t.errors||[]).forEach(function(v){ps.push('<span class="tchip err">'+v.platform+' ✗</span>')});
+// === 平台芯片：✓完成/✗失败/⚡进行中/灰色待处理 ===
+var doneMap={},errMap={};(t.results||[]).forEach(function(v){doneMap[v.platform]=v});
+(t.errors||[]).forEach(function(v){errMap[v.platform]=v});
 var targets=(t.platform||"").split(",").map(function(s){return s.trim()});
 var curPlat=(t.stage||"").match(/发布\s+(\S+)/);curPlat=curPlat?curPlat[1]:"";
-targets.forEach(function(p){if(!p)return;var done=(t.results||[]).find(function(r){return r.platform===p});var err=(t.errors||[]).find(function(r){return r.platform===p});if(done||err){}else if(p===curPlat||!ps.length){ps.push('<span class="tchip run">'+p+' ⚡</span>')}else{ps.push('<span class="tchip">'+p+'</span>')}});
+var ps=targets.map(function(p){if(!p)return "";
+  if(doneMap[p]){var v=doneMap[p];return '<span class="tchip'+(v.ok?' ok':' err')+'">'+esc(p)+(v.ok?' ✓':' ✗')+'</span>'}
+  if(errMap[p])return '<span class="tchip err">'+esc(p)+' ✗</span>';
+  if(p===curPlat)return '<span class="tchip run">'+esc(p)+' ⚡</span>';
+  return '<span class="tchip">'+esc(p)+'</span>';
+}).filter(Boolean);
 $("tmeta").innerHTML=ps.join("");
-// 进度条动画：多平台按比例平滑走
-var pr=Math.max(parseInt(t.progress)||0,5);if(t.status==="running"&&pr>=95)pr=92;$("tfill").style.width=pr+"%";
-if(t.status==="done"){$("tfill").className="fill ok";$("tfill").style.width="100%";$("tstage").textContent="✅ 全部完成"}
-else if(t.status==="error"){$("tfill").className="fill err";$("tfill").style.width="100%";$("tstage").textContent="❌ 有错误"}
-else{$("tstage").textContent=t.stage||"处理中…"}
-// 步骤列表：用图标显示状态
-var se=$("tsteps");if(t.steps&&t.steps.length>se.childNodes.length){se.innerHTML=t.steps.map(function(s,i,a){var icon="⚡";var cls="cur";var nxt=((t.status==="done"||t.status==="error")&&i===a.length-1)?(t.status==="done"?"✓":"✗"):"";if(nxt){icon=nxt;cls=nxt==="✓"?"ok":"err"}else if(t.status!=="running"){icon=nxt||"✓"+(t.status==="done"?"":" ");cls="ok"};return'<div><span class="icn '+cls+'">'+icon+'</span>'+esc(s)+"</div>"}).join("");se.scrollTop=se.scrollHeight}
-// 任务结束：延迟关闭 + 日志输出
-if(t.status==="done"||t.status==="error"){var isOk=t.status==="done";$("tclose").style.display="inline-block";$("tclose").onclick=function(){stopPoll()};
+// === 进度条：平滑过渡 + 流动动画 ===
+var pr=Math.max(parseInt(t.progress)||0,3);
+var tbar=$("tbar"),tfill=$("tfill");
+if(t.status==="running"){tbar.className=tbar.className.replace(" shimmer","")+" shimmer";}else{tbar.className=tbar.className.replace(" shimmer","");}
+if(t.status==="done"){tfill.className="fill ok";tfill.style.width="100%";$("tstage").textContent="✅ 全部完成";tbar.className=tbar.className.replace(" shimmer","");}
+else if(t.status==="error"){tfill.className="fill err";tfill.style.width="100%";$("tstage").textContent="❌ 有错误";tbar.className=tbar.className.replace(" shimmer","");}
+else{tfill.className="fill";tfill.style.width=pr+"%";$("tstage").textContent=t.stage||"处理中…"}
+// === 步骤列表：已完成✓ / 当前⚡ / 最终✓✗ ===
+var se=$("tsteps");if(t.steps&&t.steps.length>se.childNodes.length){var sl=t.steps,li=sl.length-1;
+se.innerHTML=sl.map(function(s,i){var icon,cls;
+  if(t.status==="running"){icon=i<li?"✓":"⚡";cls=i<li?"ok":"cur";}
+  else if(t.status==="done"){icon="✓";cls="ok";}
+  else{icon=i<li?"✓":"✗";cls=i<li?"ok":"err";}
+  return '<div><span class="icn '+cls+'">'+icon+'</span>'+esc(s)+"</div>"
+}).join("");se.scrollTop=se.scrollHeight}
+// === 任务结束：日志 + 手动关闭 × ===
+if(t.status==="done"||t.status==="error"){var isOk=t.status==="done";
+$("tclose").style.display="inline-block";$("tclose").onclick=function(){stopPoll()};
 lg("== "+(isOk?"✔ 发布成功":"✘ 发布有错误")+" ==",isOk?"ok":"err");
 (t.results||[]).forEach(function(v){lg("["+v.platform+"] "+(v.ok?"✓ ":"✗ ")+v.message,v.ok?"ok":"err")});
 (t.errors||[]).forEach(function(v){lg("["+v.platform+"] 错误:"+v.error,"err")});
-busy(false);
-if(!ST._autoClose){ST._autoClose=true;setTimeout(function(){ST._autoClose=false;if($("progress").classList.contains("hide"))return;stopPoll()},5000)}
-}else{setTimeout(poll,600)}})}
-function stopPoll(){ST.POLL=null;$("tclose").style.display="none";$("progress").classList.add("hide");ST._autoClose=false}
+busy(false)}
+else{$("tclose").style.display="none";setTimeout(poll,600)}})}
+function stopPoll(){ST.POLL=null;$("tclose").style.display="none";$("progress").classList.add("hide")}
 function ds(){var a=ST.cur;if(!a||!a.package_name){toast("请选择应用","err");return}
 lg("== 查询状态 "+a.name+" ==");busy(true);$("sg").innerHTML="<div class=muted>查询中…</div>";api("/api/status",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({app_id:a.id,platform:selPlats()||"all"})}).then(function(r){renderStatusGrid(r.statuses||[]);busy(false)}).catch(function(){ $("sg").innerHTML='<div class=muted>查询失败</div>';busy(false)})}
 function renderStatusGrid(s){var e=document.getElementById("sg");if(!e)return;if(!s||!s.length){e.innerHTML='<div class=muted>无数据</div>';return}
