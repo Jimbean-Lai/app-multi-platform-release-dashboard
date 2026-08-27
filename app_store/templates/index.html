@@ -220,6 +220,8 @@ $("tclose").style.display="inline-block";$("tclose").onclick=function(){stopPoll
 lg("== "+(isOk?"✔ 发布成功":"✘ 发布有错误")+" ==",isOk?"ok":"err");
 (t.results||[]).forEach(function(v){lg("["+v.platform+"] "+(v.ok?"✓ ":"✗ ")+v.message,v.ok?"ok":"err")});
 (t.errors||[]).forEach(function(v){lg("["+v.platform+"] 错误:"+v.error,"err")});
+// 任务结束：刷新发布历史显示（后端已落盘，此处重新拉取展示）
+api("/api/tasks").then(function(tr){if(tr&&tr.history)renderHistory(tr.history.slice(0,8))});
 busy(false)}
 else{$("tclose").style.display="none";setTimeout(poll,600)}})}
 function stopPoll(){ST.POLL=null;$("tclose").style.display="none";$("progress").classList.add("hide")}
