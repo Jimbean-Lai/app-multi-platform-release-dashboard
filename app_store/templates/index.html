@@ -140,7 +140,7 @@ h+='<div class=grid><div class=card><h3>应用信息</h3>'+
 h+='<div class=card><h3>构建产物</h3>'+
 '<div class=input-row><input id=paab value="'+esc(a.aab_build||"")+'" placeholder="AAB (Google Play)"><button class=sm secondary onclick=fp("aab")>检测</button><button class=sm secondary onclick=clr("paab")>清</button></div>'+
 '<div class=input-row><input id=papk value="'+esc(a.apk_build||"")+'" placeholder="APK (国内平台)"><button class=sm secondary onclick=fp("apk")>检测</button><button class=sm secondary onclick=clr("papk")>清</button></div>'+
-(a.aab_exists?'<span class=badge style=color:var(--ok)>AAB 存在</span> ':"")+(a.apk_exists?'<span class=badge style=color:var(--ok)>APK 存在</span>':"")+'<div style=margin-top:8px><button onclick=pth()>保存路径</button></div></div>';
+(a.aab_exists?'<span class=badge style=color:var(--ok)>AAB 存在</span> ':"")+(a.apk_exists?'<span class=badge style=color:var(--ok)>APK 存在</span>':"")+'<div id=papkAlert style=font-size:12px;margin:4px 0;min-height:16px></div><div style=margin-top:4px><button onclick=pth()>保存路径</button></div></div>';
 h+='<div class=card><h3>发布</h3>'+
 '<div><label>版本名</label><input id=ipvn readonly value="'+(a.version_name||"")+'"></div>'+
 '<div><label>versionCode</label><input id=ipvc readonly value="'+(a.version_code==null?"":a.version_code)+'"></div>'+
@@ -154,19 +154,31 @@ function row(k,v){return'<div class=row><span class=k>'+esc(k)+'</span><span cla
 function clr(x){$(x).value="";pth()}
 function fp(t){var a=ST.cur;if(!a)return;api("/api/files").then(function(f){var l=(f&&f[t])||[];if(!l.length){toast("未检测到"+t.toUpperCase()+"文件","err");return}
 var h='<div class="overlay" onclick="if(event.target===this)cm()"><div class="modal"><h3 style=margin-bottom:8px>选择 '+t.toUpperCase()+" 文件</h3>";(l||[]).forEach(function(x){var z=x.size>1e6?(x.size/1e6).toFixed(1)+" MB":Math.max(1,Math.round(x.size/1e3))+" KB";h+='<div class="file-item" data-type="'+t+'" data-path="'+esc(x.path)+'" onclick="pick(this)"><span class=fname>'+esc(x.name)+'</span><span class=muted>'+z+"</span></div>"});h+='<div style=margin-top:10px;text-align:right><button class=secondary onclick=cm()>取消</button></div></div></div>';var d=document.createElement("div");d.innerHTML=h;document.body.appendChild(d.firstElementChild)})}
-function pick(el){var t=el.dataset.type,p=el.dataset.path;var inp=$(t==="aab"?"paab":"papk");inp.value=p;cm();toast("已选: "+p.split("/").pop());if(t==="apk"&&ST.cur)autoMeta(p,ST.cur.id)}
+function pick(el){var t=el.dataset.type,p=el.dataset.path;var inp=$(t==="aab"?"paab":"papk");inp.value=p;cm();toast("已选: "+p.split("/").pop());if(ST.cur)autoMeta(p,ST.cur.id,t)}
 function cm(){document.querySelectorAll(".overlay").forEach(function(e){if(e.id!=="toast")e.remove()})}
-function pth(){var a=ST.cur;if(!a)return;var ab=$("paab").value.trim(),ap=$("papk").value.trim();busy(true);api("/api/apps/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({app_id:a.id,aab_build:ab,apk_build:ap})}).then(function(r){if(r.ok){lg("路径已保存","ok");toast("路径已保存");if(ap&&!r.error)autoMeta(ap,a.id)}else{lg("保存失败: "+JSON.stringify(r),"err")}}).finally(function(){busy(false)})}
+function pth(){var a=ST.cur;if(!a)return;var ab=$("paab").value.trim(),ap=$("papk").value.trim();busy(true);api("/api/apps/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({app_id:a.id,aab_build:ab,apk_build:ap})}).then(function(r){if(r.ok){lg("路径已保存","ok");toast("路径已保存");if(ap&&!r.error)autoMeta(ap,a.id,"apk");if(ab&&!r.error)autoMeta(ab,a.id,"aab")}else{lg("保存失败: "+JSON.stringify(r),"err")}}).finally(function(){busy(false)})}
 function publishPlatsHTML(){var pubs=(ST.platforms||[]).filter(function(p){return p.platform!=="apple"});var labelMap={huawei:"华为",oppo:"OPPO",vivo:"VIVO",xiaomi:"小米",honor:"荣耀",google:"Google Play"};return pubs.map(function(p){var nm=labelMap[p.platform]||p.display_name;var badge=p.availability==="ready"?"":"(骨架)";return '<label class=plat-item><input type=checkbox class=plat-cb value="'+p.platform+'" '+""+'><span>'+nm+'</span>'+badge+'</label>'}).join("")}
 function platAll(on){document.querySelectorAll(".plat-cb").forEach(function(c){c.checked=!!on})}
 function selPlats(){var arr=[];document.querySelectorAll(".plat-cb:checked").forEach(function(c){arr.push(c.value)});return arr.length?arr.join(","):"all"}
-function autoMeta(path,appId){api("/api/apk/meta",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:path})}).then(function(r){if(!r.ok){lg("APK解析: "+(r.error||"失败"),"err");return}
-var a=ST.cur;var msg="";
-if(a&&r.package_name&&a.package_name&&r.package_name!==a.package_name){msg="⚠️ 包名不一致! APK="+r.package_name+" vs 配置="+a.package_name;lg(msg,"err");var al=$("papkAlert");if(al)al.textContent=msg}
-if(a&&r.package_name&&a.package_name&&r.package_name===a.package_name){lg("APK 包名一致: "+r.package_name,"ok")}
-if($("ipvn"))$("ipvn").value=r.version_name||"";
-if($("ipvc"))$("ipvc").value=(r.version_code==null?"":r.version_code);
-if(r.version_name||r.version_code!=null){var fields={app_id:appId};if(r.version_name)fields.version_name=r.version_name;if(r.version_code!=null)fields.version_code=r.version_code;api("/api/apps/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(fields)}).then(function(){lg("已自动保存版本: "+r.version_name+" / "+r.version_code,"ok");if(ST.cur&&ST.cur.id===appId){ST.cur.version_name=r.version_name;ST.cur.version_code=r.version_code;renderMain()}})}
+function autoMeta(path,appId,type){type=type||(path.toLowerCase().endsWith(".aab")?"aab":"apk");
+api("/api/apk/meta",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:path})}).then(function(r){if(!r.ok){lg((type==="aab"?"AAB":"APK")+"解析失败: "+(r.error||"失败"),"err");return}
+var a=ST.cur;var al=$("papkAlert");var msg="";
+var exp=((a&&a.package_name)||"").trim();var real=(r.package_name||"").trim();
+if(exp&&real){if(real!==exp){msg='<span style="color:var(--err)">⚠️ 包名不一致：安装包='+esc(real)+' vs 配置='+esc(exp)+'</span>';lg("包名不一致! "+real+" ≠ "+exp,"err");if(al)al.innerHTML=msg}
+else{msg='<span style="color:var(--ok)">✓ 包名一致：'+esc(real)+'</span>';lg("包名一致: "+real,"ok");if(al)al.innerHTML=msg}}
+// 版本信息回填（APK 有；AAB 目前只解析出包名）
+if($("ipvn"))$("ipvn").value=r.version_name||($("ipvn").value||"");
+if($("ipvc"))$("ipvc").value=(r.version_code==null?($("ipvc").value||""):r.version_code);
+// 保存选择路径 + 版本到目录
+var fields={app_id:appId};if(type==="aab")fields.aab_build=path;else fields.apk_build=path;
+if(r.version_name)fields.version_name=r.version_name;
+if(r.version_code!=null)fields.version_code=r.version_code;
+api("/api/apps/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(fields)}).then(function(){lg("已保存 "+(type==="aab"?"AAB":"APK")+" 路径与版本","ok");if(ST.cur&&ST.cur.id===appId){
+ST.cur.version_name=r.version_name||ST.cur.version_name;ST.cur.version_code=(r.version_code!=null?r.version_code:ST.cur.version_code);
+// 就地更新应用信息显示（不整卡重渲染，避免打断其他操作）
+if(r.version_name){var sp=document.querySelector('#appc .app-head .muted');if(sp)sp.textContent="v"+r.version_name}
+var rows=document.querySelectorAll('#appc .card .row');rows.forEach(function(ro){var k=ro.querySelector('.k');if(!k)return;if(k.textContent==='versionName'&&r.version_name){var v=ro.querySelector('.v');if(v)v.textContent=r.version_name}if(k.textContent==='versionCode'&&r.version_code!=null){var v2=ro.querySelector('.v');if(v2)v2.textContent=r.version_code}});
+}})
 })}
 function dpub(){var a=ST.cur;if(!a||!a.package_name){toast("请选择应用（需配包名）","err");return}
 var body={app_id:a.id,platform:selPlats(),dry_run:$("ipdry").checked,auto_review:$("ipauto").checked,version_name:$("ipvn").value.trim(),version_code:parseInt($("ipvc").value)||null,release_notes:$("ipn").value.trim(),track:$("ipv").value,aab_path:$("paab").value.trim(),apk_path:$("papk").value.trim(),online_time:document.getElementById("pot")?document.getElementById("pot").value.trim():""};
