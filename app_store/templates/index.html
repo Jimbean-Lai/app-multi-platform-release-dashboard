@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AppStore 发布看板</title>
+<title>App发布看板</title>
 <style>
 :root{--bg:#0f172a;--panel:#1e293b;--panel2:#294061;--line:#3b4a63;--txt:#e2e8f0;--mut:#94a3b8;--acc:#38bdf8;--ok:#4ade80;--err:#f87171;--warn:#fbbf24}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -62,13 +62,25 @@ label{display:block;color:var(--mut);font-size:11px;margin:8px 0 3px}
 .result .err{color:var(--err)}
 .hide{display:none}
 .muted{color:var(--mut);font-size:12px}
-#tb .card{padding:12px 16px}
-#tbar{height:7px;background:#0f1626;border-radius:4px;overflow:hidden}
-#tbar .fill{height:100%;width:0%;background:linear-gradient(90deg,var(--acc),#22d3ee);border-radius:4px;transition:width .35s}
-#tsteps{font-size:11.5px;max-height:110px;overflow-y:auto;margin-top:6px;color:var(--mut)}
-#tsteps div{padding:1px 0}
-#tinfo{font-size:13px;font-weight:600;margin-bottom:2px}
-#tstage{font-size:11.5px;color:var(--mut);margin:4px 0}
+#tbar{height:14px;background:var(--panel2);border-radius:10px;overflow:hidden;position:relative;box-shadow:inset 0 1px 3px rgba(0,0,0,.4)}
+#tbar .fill{height:100%;width:0%;background:linear-gradient(90deg,var(--acc),#22d3ee,#38bdf8);border-radius:10px;transition:width .4s ease;position:relative}
+#tbar .fill::after{content:'';position:absolute;top:0;left:10%;right:10%;height:50%;background:rgba(255,255,255,.15);border-radius:10px 10px 0 0}
+#tbar .fill.ok{background:linear-gradient(90deg,#22c55e,#4ade80)}
+#tbar .fill.err{background:linear-gradient(90deg,#ef4444,#f87171)}
+#tsteps{font-size:12px;max-height:130px;overflow-y:auto;margin-top:8px;color:var(--txt)}
+#tsteps div{padding:2px 0;display:flex;align-items:center;gap:6px}
+#tsteps div .icn{font-size:14px;flex-shrink:0}
+#tsteps div .icn.ok{color:var(--ok)}
+#tsteps div .icn.err{color:var(--err)}
+#tsteps div .icn.cur{color:var(--acc);animation:pulseicn 1s infinite}
+@keyframes pulseicn{0%,100%{opacity:1}50%{opacity:.4}}
+#tinfo{font-size:14px;font-weight:600;margin-bottom:4px}
+#tstage{font-size:12.5px;color:var(--acc);margin:4px 0}
+#tmeta{display:flex;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--mut);margin-bottom:4px}
+#tmeta .tchip{background:#23395e;border-radius:12px;padding:2px 10px;display:inline-flex;align-items:center;gap:4px}
+#tmeta .tchip.ok{background:#14532d;color:var(--ok)}
+#tmeta .tchip.err{background:#7f1d1d;color:var(--err)}
+#tmeta .tchip.run{background:#1e3a5f;color:var(--acc)}
 .overlay{position:fixed;inset:0;background:rgba(2,6,23,.6);display:flex;align-items:center;justify-content:center;z-index:60}
 .modal{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;min-width:380px;max-width:90vw;max-height:70vh;overflow-y:auto}
 .file-item{padding:8px 6px;border-bottom:1px dashed #1f2d47;cursor:pointer;display:flex;justify-content:space-between;gap:12px;font-size:12.5px}
@@ -83,15 +95,15 @@ label{display:block;color:var(--mut);font-size:11px;margin:8px 0 3px}
 </head>
 <body>
 <header>
-  <div style=display:flex;align-items:center;gap:12px><h1>AppStore 发布看板</h1><span class=muted id=cfg></span></div>
+  <div style=display:flex;align-items:center;gap:12px><h1>App发布看板</h1><span class=muted id=cfg></span></div>
   <div class=hdr-right><button class=secondary sm onclick=ld()>刷新</button><button class=secondary sm onclick=validateAll()>校验凭证</button></div>
 </header>
 <div class=layout>
   <aside id=sb></aside>
   <main>
     <div id=appc><!-- 应用详情+发布表单 --></div>
-    <div id=progress class=hide style=flex-shrink:0><div class=card>
-      <div style=display:flex;justify-content:space-between;align-items:center><b style=font-size:13px id=tinfo></b><button class="secondary sm" onclick=stopPoll() style=display:none></button></div>
+    <div id=progress class=hide><div class=card>
+      <div style=display:flex;justify-content:space-between;align-items:start;gap:8px><div><b style=font-size:14px id=tinfo></b><div id=tmeta></div></div><button class="secondary sm" onclick=stopPoll() id=tclose style=display:none>×</button></div>
       <div id=tstage></div>
       <div id=tbar><div class=fill id=tfill></div></div>
       <div id=tsteps></div>
@@ -157,12 +169,33 @@ if(r.version_name||r.version_code!=null){var fields={app_id:appId};if(r.version_
 function dpub(){var a=ST.cur;if(!a||!a.package_name){toast("请选择应用（需配包名）","err");return}
 var body={app_id:a.id,platform:selPlats(),dry_run:$("ipdry").checked,auto_review:$("ipauto").checked,version_name:$("ipvn").value.trim(),version_code:parseInt($("ipvc").value)||null,release_notes:$("ipn").value.trim(),track:$("ipv").value,aab_path:$("paab").value.trim(),apk_path:$("papk").value.trim(),online_time:document.getElementById("pot")?document.getElementById("pot").value.trim():""};
 lg("== "+(body.dry_run?"Dry-run":"正式")+"发布 "+(a.name||a.id)+" ==");busy(true);api("/api/publish",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(function(r){if(r.task_id){lg("任务: "+r.task_id);startPoll(r.task_id)}else{lg("启动失败: "+JSON.stringify(r),"err");busy(false)}})}
-function startPoll(tid){ST.POLL=tid;$("progress").classList.remove("hide");poll()}
+function startPoll(tid){ST.POLL=tid;$("progress").classList.remove("hide");$("tfill").style.width="5%";$("tfill").className="fill";$("tsteps").innerHTML="";poll()}
 function poll(){if(!ST.POLL)return;api("/api/tasks/"+ST.POLL).then(function(t){if(t.error){lg("查询失败","err");stopPoll();return}
-var a=(ST.apps||[]).find(function(z){return z.id===t.app_id})||{};$("tinfo").textContent=esc(a.name||t.app_id)+" → "+t.platform+(t.dry_run?" (dry-run)":"");$("tstage").textContent=t.stage||"";$("tfill").style.width=(t.progress||0)+"%";
-var se=$("tsteps");if(t.steps){se.innerHTML=t.steps.map(function(s){return"<div>"+esc(s)+"</div>"}).join("");se.scrollTop=se.scrollHeight}
-if(t.status==="done"||t.status==="error"){stopPoll();lg("== 结束"+(t.status==="done"?"成功":"有错误")+"==",t.status==="done"?"ok":"err");(t.results||[]).forEach(function(v){lg("["+v.platform+"] "+(v.ok?"OK ":"FAIL ")+v.message,v.ok?"ok":"err")});(t.errors||[]).forEach(function(v){lg("["+v.platform+"] 错误:"+v.error,"err")});busy(false)}else{setTimeout(poll,800)}})}
-function stopPoll(){ST.POLL=null;var b=$("progress");if(b)b.classList.add("hide")}
+var a=(ST.apps||[]).find(function(z){return z.id===t.app_id})||{};
+$("tinfo").textContent=esc(a.name||t.app_id)+" → "+esc(t.platform)+(t.dry_run?" ⚡dry-run":"");
+// 平台进度芯片
+var ps=[];(t.results||[]).forEach(function(v){ps.push('<span class="tchip ok">'+v.platform+' ✓</span>')});
+(t.errors||[]).forEach(function(v){ps.push('<span class="tchip err">'+v.platform+' ✗</span>')});
+var targets=(t.platform||"").split(",").map(function(s){return s.trim()});
+var curPlat=(t.stage||"").match(/发布\s+(\S+)/);curPlat=curPlat?curPlat[1]:"";
+targets.forEach(function(p){if(!p)return;var done=(t.results||[]).find(function(r){return r.platform===p});var err=(t.errors||[]).find(function(r){return r.platform===p});if(done||err){}else if(p===curPlat||!ps.length){ps.push('<span class="tchip run">'+p+' ⚡</span>')}else{ps.push('<span class="tchip">'+p+'</span>')}});
+$("tmeta").innerHTML=ps.join("");
+// 进度条动画：多平台按比例平滑走
+var pr=Math.max(parseInt(t.progress)||0,5);if(t.status==="running"&&pr>=95)pr=92;$("tfill").style.width=pr+"%";
+if(t.status==="done"){$("tfill").className="fill ok";$("tfill").style.width="100%";$("tstage").textContent="✅ 全部完成"}
+else if(t.status==="error"){$("tfill").className="fill err";$("tfill").style.width="100%";$("tstage").textContent="❌ 有错误"}
+else{$("tstage").textContent=t.stage||"处理中…"}
+// 步骤列表：用图标显示状态
+var se=$("tsteps");if(t.steps&&t.steps.length>se.childNodes.length){se.innerHTML=t.steps.map(function(s,i,a){var icon="⚡";var cls="cur";var nxt=((t.status==="done"||t.status==="error")&&i===a.length-1)?(t.status==="done"?"✓":"✗"):"";if(nxt){icon=nxt;cls=nxt==="✓"?"ok":"err"}else if(t.status!=="running"){icon=nxt||"✓"+(t.status==="done"?"":" ");cls="ok"};return'<div><span class="icn '+cls+'">'+icon+'</span>'+esc(s)+"</div>"}).join("");se.scrollTop=se.scrollHeight}
+// 任务结束：延迟关闭 + 日志输出
+if(t.status==="done"||t.status==="error"){var isOk=t.status==="done";$("tclose").style.display="inline-block";$("tclose").onclick=function(){stopPoll()};
+lg("== "+(isOk?"✔ 发布成功":"✘ 发布有错误")+" ==",isOk?"ok":"err");
+(t.results||[]).forEach(function(v){lg("["+v.platform+"] "+(v.ok?"✓ ":"✗ ")+v.message,v.ok?"ok":"err")});
+(t.errors||[]).forEach(function(v){lg("["+v.platform+"] 错误:"+v.error,"err")});
+busy(false);
+if(!ST._autoClose){ST._autoClose=true;setTimeout(function(){ST._autoClose=false;if($("progress").classList.contains("hide"))return;stopPoll()},5000)}
+}else{setTimeout(poll,600)}})}
+function stopPoll(){ST.POLL=null;$("tclose").style.display="none";$("progress").classList.add("hide");ST._autoClose=false}
 function ds(){var a=ST.cur;if(!a||!a.package_name){toast("请选择应用","err");return}
 lg("== 查询状态 "+a.name+" ==");busy(true);$("sg").innerHTML="<div class=muted>查询中…</div>";api("/api/status",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({app_id:a.id,platform:selPlats()||"all"})}).then(function(r){renderStatusGrid(r.statuses||[]);busy(false)}).catch(function(){ $("sg").innerHTML='<div class=muted>查询失败</div>';busy(false)})}
 function renderStatusGrid(s){var e=document.getElementById("sg");if(!e)return;if(!s||!s.length){e.innerHTML='<div class=muted>无数据</div>';return}
