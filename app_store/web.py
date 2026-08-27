@@ -227,7 +227,9 @@ def _publish_worker(tid: str):
             except StoreError as e:
                 errors.append({"platform": key, "error": str(e)})
                 _step(tid, f"  {key}: 错误 {e}", "error")
-            _update(tid, progress=min(95, 15 + int(75 * (i + 1) / len(targets))))
+            prog = min(95, 15 + int(75 * (i + 1) / len(targets)))
+            # 增量写入 results/errors，让前端每平台完成时立即看到 ✓/✗
+            _update(tid, progress=prog, results=list(results), errors=list(errors))
         _update(tid, status="done", progress=100, stage="全部完成" if not errors else "有错误",
                 results=results, errors=errors)
         if errors:
