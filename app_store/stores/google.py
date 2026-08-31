@@ -152,63 +152,52 @@ class GoogleAdapter(StoreAdapter):
             is_aab = path.suffix.lower() == ".aab"
             mime = "application/octet-stream" if is_aab else "application/vnd.android.package-archive"
             pc = (release.metadata or {}).get("_progress_cb")
+            fs = path.stat().st_size
+            import googleapiclient.http as _gh
+
             if pc:
-                fs = path.stat().st_size
-                import googleapiclient.http as _gh
-                # 用 MediaIoBaseUpload 包装带进度的文件对象（非 resumable 单请求直传，
-                # httplib2 会分块 read 文件 → 进度回调逐块触发）
-                media = _gh.MediaIoBaseUpload(
-                    _ProgressFile(str(path), fs, pc),
-                    mimetype=mime,
-                    chunksize=-1,
-                    resumable=False,
-                )
+                # == resumable 上传 + next_chunk 手动循环 → 真正逐块网络上传 × 实时进度 ==
+                try:
+                    media = _gh.MediaIoBaseUpload(
+                        _ProgressFile(str(path), fs, pc),
+                        mimetype=mime, chunksize=self._upload_chunk,
+                        resumable=True,
+                    )
+                    if is_aab:
+                        req = service.edits().bundles().upload(
+                            packageName=package, editId=edit_id, media_body=media,
+                        )
+                    else:
+                        req = service.edits().apks().upload(
+                            packageName=package, editId=edit_id, media_body=media,
+                        )
+                    uploaded = None
+                    while uploaded is None:
+                        status, uploaded = req.next_chunk(num_retries=self._upload_retries)
+                        if status:
+                            pc(int(status.resumable_progress), fs)
+                except Exception as res_er:
+                    # resumable 初始化失败（中间网络拦截 redirect → missing Location）
+                    # → 降级为 direct upload（能传但进度一次跳完）
+                    import logging as _lg
+                    _lg.warning("resumable upload failed, fallback to direct: %s", res_er)
+                    pc = None
+
+            if not pc:
+                # direct upload（非 resumable；googleapiclient 一次性 getbytes 读进内存后发）
                 if is_aab:
                     uploaded = (
-                        service.edits()
-                        .bundles()
-                        .upload(
-                            packageName=package,
-                            editId=edit_id,
-                            media_body=media,
-                        )
-                        .execute(num_retries=self._upload_retries)
+                        service.edits().bundles().upload(
+                            packageName=package, editId=edit_id,
+                            media_body=str(path), media_mime_type=mime,
+                        ).execute(num_retries=self._upload_retries)
                     )
                 else:
                     uploaded = (
-                        service.edits()
-                        .apks()
-                        .upload(
-                            packageName=package,
-                            editId=edit_id,
-                            media_body=media,
-                        )
-                        .execute(num_retries=self._upload_retries)
-                    )
-            else:
-                if is_aab:
-                    uploaded = (
-                        service.edits()
-                        .bundles()
-                        .upload(
-                            packageName=package,
-                            editId=edit_id,
-                            media_body=str(path),
-                            media_mime_type=mime,
-                        )
-                        .execute(num_retries=self._upload_retries)
-                    )
-                else:
-                    uploaded = (
-                        service.edits()
-                        .apks()
-                        .upload(
-                            packageName=package,
-                            editId=edit_id,
-                            media_body=str(path),
-                            media_mime_type=mime,
-                        )
-                        .execute(num_retries=self._upload_retries)
+                        service.edits().apks().upload(
+                            packageName=package, editId=edit_id,
+                            media_body=str(path), media_mime_type=mime,
+                        ).execute(num_retries=self._upload_retries)
                     )
             version_code = uploaded.get("versionCode") or release.version_code
 
