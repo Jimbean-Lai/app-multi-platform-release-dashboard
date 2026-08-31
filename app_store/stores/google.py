@@ -23,6 +23,42 @@ _UPLOAD_TIMEOUT = 1800  # 秒，单次 socket 读/写超时（大 AAB 上传，�
 _UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 分块上传每块 8MB（避免一次性整包导致 socket 写超时）
 _UPLOAD_MAX_RETRIES = 5  # 上传失败自动重试次数
 
+
+class _ProgressFile:
+    """文件包装：读取时回调当前上传进度，用于看板实时展示。"""
+    def __init__(self, path: str, total: int, callback):
+        self._f = open(path, "rb")
+        self._total = total
+        self._sent = 0
+        self._cb = callback
+        self._last_mb = -1
+
+    def read(self, n: int = -1) -> bytes:
+        data = self._f.read(n)
+        if data:
+            self._sent += len(data)
+            cur_mb = self._sent // (512 * 1024)  # 每 512KB 汇报一次
+            if cur_mb > self._last_mb:
+                self._last_mb = cur_mb
+                if self._cb:
+                    self._cb(self._sent, self._total)
+        return data
+
+    def seek(self, offset: int, whence: int = 0) -> int:
+        return self._f.seek(offset, whence)
+
+    def tell(self) -> int:
+        return self._f.tell()
+
+    def close(self) -> None:
+        self._f.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        self.close()
+
 # 上传 AAB 后是否需要等 processing 完成再 commit（大包 1-3 分钟）
 _PROCESSING_POLL_SECONDS = 5
 _PROCESSING_MAX_WAIT = 300
@@ -114,6 +150,13 @@ class GoogleAdapter(StoreAdapter):
 
         try:
             is_aab = path.suffix.lower() == ".aab"
+            mime = "application/octet-stream" if is_aab else "application/vnd.android.package-archive"
+            pc = (release.metadata or {}).get("_progress_cb")
+            if pc:
+                fs = os.path.getsize(path)
+                body = _ProgressFile(str(path), fs, pc)
+            else:
+                body = str(path)
             if is_aab:
                 uploaded = (
                     service.edits()
@@ -121,8 +164,8 @@ class GoogleAdapter(StoreAdapter):
                     .upload(
                         packageName=package,
                         editId=edit_id,
-                        media_body=str(path),
-                        media_mime_type="application/octet-stream",
+                        media_body=body,
+                        media_mime_type=mime,
                     )
                     .execute(num_retries=self._upload_retries)
                 )
@@ -133,11 +176,13 @@ class GoogleAdapter(StoreAdapter):
                     .upload(
                         packageName=package,
                         editId=edit_id,
-                        media_body=str(path),
-                        media_mime_type="application/vnd.android.package-archive",
+                        media_body=body,
+                        media_mime_type=mime,
                     )
                     .execute(num_retries=self._upload_retries)
                 )
+            if pc:
+                body.close()
             version_code = uploaded.get("versionCode") or release.version_code
 
             # 大 AAB 上传后需等待 processing 完成
