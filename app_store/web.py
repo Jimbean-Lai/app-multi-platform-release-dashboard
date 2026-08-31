@@ -146,6 +146,7 @@ def _new_task(app_id, platform, dry_run, apk_path="", aab_path=""):
             "id": tid, "app_id": app_id, "platform": platform, "dry_run": dry_run,
             "status": "running", "progress": 0, "stage": "准备中",
             "steps": [], "results": None, "errors": None,
+            "upload": None,
         }
         _PENDING_PATHS[tid] = {"apk": apk_path, "aab": aab_path}
     return tid
@@ -220,6 +221,11 @@ def _publish_worker(tid: str):
                 if problems:
                     raise StoreError("；".join(problems))
                 _step(tid, f"  {key}: 凭证校验通过")
+                # 注入上传进度回调（Google 等适配器会读取并实时回传大小）
+                release.metadata["_progress_cb"] = lambda sent, total: _update(
+                    tid, stage=f"上传中 {sent/1024/1024:.1f}MB / {total/1024/1024:.1f}MB",
+                    upload={"sent": sent, "total": total, "pct": f"{100*sent/(total or 1):.0f}%"},
+                )
                 res = adapter.publish(release, dry_run=dry_run)
                 ok = res.ok
                 results.append({"platform": key, "ok": ok, "message": res.message, "remote_reference": res.remote_reference, "state": res.state.value})
