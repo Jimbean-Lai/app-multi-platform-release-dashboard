@@ -114,13 +114,6 @@ class GoogleAdapter(StoreAdapter):
 
         try:
             is_aab = path.suffix.lower() == ".aab"
-            media_mime = "application/octet-stream" if is_aab else "application/vnd.android.package-archive"
-            # 分块 resumable 上传 + 自动重试：解决大 AAB 一次性 socket 写超时
-            import googleapiclient.http
-            media = googleapiclient.http.MediaFileUpload(
-                str(path), mimetype=media_mime,
-                chunksize=self._upload_chunk, resumable=True,
-            )
             if is_aab:
                 uploaded = (
                     service.edits()
@@ -128,8 +121,8 @@ class GoogleAdapter(StoreAdapter):
                     .upload(
                         packageName=package,
                         editId=edit_id,
-                        media_body=media,
-                        media_mime_type=media_mime,
+                        media_body=str(path),
+                        media_mime_type="application/octet-stream",
                     )
                     .execute(num_retries=self._upload_retries)
                 )
@@ -140,8 +133,8 @@ class GoogleAdapter(StoreAdapter):
                     .upload(
                         packageName=package,
                         editId=edit_id,
-                        media_body=media,
-                        media_mime_type=media_mime,
+                        media_body=str(path),
+                        media_mime_type="application/vnd.android.package-archive",
                     )
                     .execute(num_retries=self._upload_retries)
                 )
