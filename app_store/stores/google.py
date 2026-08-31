@@ -23,6 +23,43 @@ _UPLOAD_TIMEOUT = 1800  # 秒，单次 socket 读/写超时（大 AAB 上传，�
 _UPLOAD_MAX_RETRIES = 5  # 上传失败自动重试次数
 
 
+class _ProgressFile:
+    """文件包装：httplib2 分块读文件时回调当前已传大小 → 看板实时显示上传进度。"""
+
+    def __init__(self, path: str, total: int, callback):
+        self._f = open(path, "rb")
+        self._total = total
+        self._sent = 0
+        self._cb = callback
+        self._last = -1
+
+    def read(self, n: int = -1) -> bytes:
+        data = self._f.read(n)
+        if data:
+            self._sent += len(data)
+            cur = self._sent // (512 * 1024)  # 每 512KB 汇报一次
+            if cur > self._last:
+                self._last = cur
+                if self._cb:
+                    self._cb(self._sent, self._total)
+        return data
+
+    def seek(self, offset: int, whence: int = 0) -> int:
+        return self._f.seek(offset, whence)
+
+    def tell(self) -> int:
+        return self._f.tell()
+
+    def close(self) -> None:
+        self._f.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        self.close()
+
+
 # 上传 AAB 后是否需要等 processing 完成再 commit（大包 1-3 分钟）
 _PROCESSING_POLL_SECONDS = 5
 _PROCESSING_MAX_WAIT = 300
@@ -114,25 +151,48 @@ class GoogleAdapter(StoreAdapter):
         try:
             is_aab = path.suffix.lower() == ".aab"
             mime = "application/octet-stream" if is_aab else "application/vnd.android.package-archive"
+            pc = (release.metadata or {}).get("_progress_cb")
             scb = (release.metadata or {}).get("_step_cb")
+            fs = path.stat().st_size
             if scb:
                 scb("开始上传安装包 " + path.name)
-            # direct upload：单次流式 POST（单连接）。resumable 分块在此网络会被中间件
-            # 挂起（第二个 PUT 无响应），direct 配大超时+重试最可靠；进度以步骤 ⚡/✓ 指示
-            if is_aab:
-                uploaded = (
-                    service.edits().bundles().upload(
-                        packageName=package, editId=edit_id,
-                        media_body=str(path), media_mime_type=mime,
-                    ).execute(num_retries=self._upload_retries)
-                )
+
+            if pc:
+                # == httplib2 直接流式 POST 文件对象 ==
+                # httplib2 分块 read+send 交替（实测 5MB→641 次），_ProgressFile 回调实时触发
+                # 单连接（不分块续传），避免 resumable 第二个 PUT 被中间件挂起
+                upload_path = "bundles" if is_aab else "apks"
+                upload_url = (f"https://androidpublisher.googleapis.com/upload/androidpublisher/v3/"
+                              f"applications/{package}/edits/{edit_id}/{upload_path}?uploadType=media")
+                import httplib2 as _hb2
+                pf = _ProgressFile(str(path), fs, pc)
+                try:
+                    resp, content = service._http.request(
+                        upload_url, method="POST", body=pf,
+                        headers={"Content-Type": mime, "Content-Length": str(fs)},
+                    )
+                    if resp.status != 200:
+                        raise StoreError(
+                            f"Google Play 上传失败: HTTP {resp.status}: {content[:300]}")
+                    uploaded = json.loads(content)
+                finally:
+                    pf.close()
             else:
-                uploaded = (
-                    service.edits().apks().upload(
-                        packageName=package, editId=edit_id,
-                        media_body=str(path), media_mime_type=mime,
-                    ).execute(num_retries=self._upload_retries)
-                )
+                # 无进度回调时走 googleapiclient 标准 upload
+                if is_aab:
+                    uploaded = (
+                        service.edits().bundles().upload(
+                            packageName=package, editId=edit_id,
+                            media_body=str(path), media_mime_type=mime,
+                        ).execute(num_retries=self._upload_retries)
+                    )
+                else:
+                    uploaded = (
+                        service.edits().apks().upload(
+                            packageName=package, editId=edit_id,
+                            media_body=str(path), media_mime_type=mime,
+                        ).execute(num_retries=self._upload_retries)
+                    )
             if scb:
                 scb("上传完成 (versionCode " + str(uploaded.get("versionCode") or "") + ")")
             version_code = uploaded.get("versionCode") or release.version_code
