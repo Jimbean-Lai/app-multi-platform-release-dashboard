@@ -20,44 +20,8 @@ from ..models import AuditState, Platform, Release, SubmitResult, StoreStatus, u
 
 _ANDROIDPUBLISHER_SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 _UPLOAD_TIMEOUT = 1800  # 秒，单次 socket 读/写超时（大 AAB 上传，按需在凭证里覆盖）
-_UPLOAD_CHUNK_SIZE = 2 * 1024 * 1024  # 分块上传每块 2MB（网络 0.2MB/s 时约 10s 更新一次进度）
 _UPLOAD_MAX_RETRIES = 5  # 上传失败自动重试次数
 
-
-class _ProgressFile:
-    """文件包装：读取时回调当前上传进度，用于看板实时展示。"""
-    def __init__(self, path: str, total: int, callback):
-        self._f = open(path, "rb")
-        self._total = total
-        self._sent = 0
-        self._cb = callback
-        self._last_mb = -1
-
-    def read(self, n: int = -1) -> bytes:
-        data = self._f.read(n)
-        if data:
-            self._sent += len(data)
-            cur_mb = self._sent // (512 * 1024)  # 每 512KB 汇报一次
-            if cur_mb > self._last_mb:
-                self._last_mb = cur_mb
-                if self._cb:
-                    self._cb(self._sent, self._total)
-        return data
-
-    def seek(self, offset: int, whence: int = 0) -> int:
-        return self._f.seek(offset, whence)
-
-    def tell(self) -> int:
-        return self._f.tell()
-
-    def close(self) -> None:
-        self._f.close()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *a):
-        self.close()
 
 # 上传 AAB 后是否需要等 processing 完成再 commit（大包 1-3 分钟）
 _PROCESSING_POLL_SECONDS = 5
@@ -73,7 +37,6 @@ class GoogleAdapter(StoreAdapter):
     def __init__(self, credentials: Dict[str, Any]) -> None:
         super().__init__(credentials)
         self._upload_timeout = int(self.credentials.get("upload_timeout", _UPLOAD_TIMEOUT))
-        self._upload_chunk = int(self.credentials.get("upload_chunk_size", _UPLOAD_CHUNK_SIZE))
         self._upload_retries = int(self.credentials.get("upload_max_retries", _UPLOAD_MAX_RETRIES))
         self._apps = self.credentials.get("apps") or {}
 
@@ -151,59 +114,37 @@ class GoogleAdapter(StoreAdapter):
         try:
             is_aab = path.suffix.lower() == ".aab"
             mime = "application/octet-stream" if is_aab else "application/vnd.android.package-archive"
-            pc = (release.metadata or {}).get("_progress_cb")
-            fs = path.stat().st_size
-            import googleapiclient.http as _gh
-
-            if pc:
-                # == resumable 上传 + next_chunk 手动循环 → 真正逐块网络上传 × 实时进度 ==
-                try:
-                    media = _gh.MediaIoBaseUpload(
-                        _ProgressFile(str(path), fs, pc),
-                        mimetype=mime, chunksize=self._upload_chunk,
-                        resumable=True,
-                    )
-                    if is_aab:
-                        req = service.edits().bundles().upload(
-                            packageName=package, editId=edit_id, media_body=media,
-                        )
-                    else:
-                        req = service.edits().apks().upload(
-                            packageName=package, editId=edit_id, media_body=media,
-                        )
-                    uploaded = None
-                    while uploaded is None:
-                        status, uploaded = req.next_chunk(num_retries=self._upload_retries)
-                        if status:
-                            pc(int(status.resumable_progress), fs)
-                except Exception as res_er:
-                    # resumable 初始化失败（中间网络拦截 redirect → missing Location）
-                    # → 降级为 direct upload（能传但进度一次跳完）
-                    import logging as _lg
-                    _lg.warning("resumable upload failed, fallback to direct: %s", res_er)
-                    pc = None
-
-            if not pc:
-                # direct upload（非 resumable；googleapiclient 一次性 getbytes 读进内存后发）
-                if is_aab:
-                    uploaded = (
-                        service.edits().bundles().upload(
-                            packageName=package, editId=edit_id,
-                            media_body=str(path), media_mime_type=mime,
-                        ).execute(num_retries=self._upload_retries)
-                    )
-                else:
-                    uploaded = (
-                        service.edits().apks().upload(
-                            packageName=package, editId=edit_id,
-                            media_body=str(path), media_mime_type=mime,
-                        ).execute(num_retries=self._upload_retries)
-                    )
+            scb = (release.metadata or {}).get("_step_cb")
+            if scb:
+                scb("开始上传安装包 " + path.name)
+            # direct upload：单次流式 POST（单连接）。resumable 分块在此网络会被中间件
+            # 挂起（第二个 PUT 无响应），direct 配大超时+重试最可靠；进度以步骤 ⚡/✓ 指示
+            if is_aab:
+                uploaded = (
+                    service.edits().bundles().upload(
+                        packageName=package, editId=edit_id,
+                        media_body=str(path), media_mime_type=mime,
+                    ).execute(num_retries=self._upload_retries)
+                )
+            else:
+                uploaded = (
+                    service.edits().apks().upload(
+                        packageName=package, editId=edit_id,
+                        media_body=str(path), media_mime_type=mime,
+                    ).execute(num_retries=self._upload_retries)
+                )
+            if scb:
+                scb("上传完成 (versionCode " + str(uploaded.get("versionCode") or "") + ")")
             version_code = uploaded.get("versionCode") or release.version_code
 
             # 大 AAB 上传后需等待 processing 完成
             if is_aab and not dry_run:
+                if scb:
+                    scb("等待 Google 处理（processing）…")
                 self._wait_processing(service, package, edit_id, version_code)
+
+            if scb:
+                scb("提交发布（tracks.update → commit）…")
 
             auto_review = bool((release.metadata or {}).get("auto_review")) or bool(self.credentials.get("auto_review"))
             track_body = {
