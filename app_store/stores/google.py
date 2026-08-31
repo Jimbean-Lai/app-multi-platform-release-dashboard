@@ -153,7 +153,7 @@ class GoogleAdapter(StoreAdapter):
             mime = "application/octet-stream" if is_aab else "application/vnd.android.package-archive"
             pc = (release.metadata or {}).get("_progress_cb")
             if pc:
-                fs = os.path.getsize(path)
+                fs = path.stat().st_size
                 body = _ProgressFile(str(path), fs, pc)
             else:
                 body = str(path)
