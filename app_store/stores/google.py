@@ -154,35 +154,62 @@ class GoogleAdapter(StoreAdapter):
             pc = (release.metadata or {}).get("_progress_cb")
             if pc:
                 fs = path.stat().st_size
-                body = _ProgressFile(str(path), fs, pc)
-            else:
-                body = str(path)
-            if is_aab:
-                uploaded = (
-                    service.edits()
-                    .bundles()
-                    .upload(
-                        packageName=package,
-                        editId=edit_id,
-                        media_body=body,
-                        media_mime_type=mime,
-                    )
-                    .execute(num_retries=self._upload_retries)
+                import googleapiclient.http as _gh
+                # 用 MediaIoBaseUpload 包装带进度的文件对象（非 resumable 单请求直传，
+                # httplib2 会分块 read 文件 → 进度回调逐块触发）
+                media = _gh.MediaIoBaseUpload(
+                    _ProgressFile(str(path), fs, pc),
+                    mimetype=mime,
+                    chunksize=-1,
+                    resumable=False,
                 )
-            else:
-                uploaded = (
-                    service.edits()
-                    .apks()
-                    .upload(
-                        packageName=package,
-                        editId=edit_id,
-                        media_body=body,
-                        media_mime_type=mime,
+                if is_aab:
+                    uploaded = (
+                        service.edits()
+                        .bundles()
+                        .upload(
+                            packageName=package,
+                            editId=edit_id,
+                            media_body=media,
+                        )
+                        .execute(num_retries=self._upload_retries)
                     )
-                    .execute(num_retries=self._upload_retries)
-                )
-            if pc:
-                body.close()
+                else:
+                    uploaded = (
+                        service.edits()
+                        .apks()
+                        .upload(
+                            packageName=package,
+                            editId=edit_id,
+                            media_body=media,
+                        )
+                        .execute(num_retries=self._upload_retries)
+                    )
+            else:
+                if is_aab:
+                    uploaded = (
+                        service.edits()
+                        .bundles()
+                        .upload(
+                            packageName=package,
+                            editId=edit_id,
+                            media_body=str(path),
+                            media_mime_type=mime,
+                        )
+                        .execute(num_retries=self._upload_retries)
+                    )
+                else:
+                    uploaded = (
+                        service.edits()
+                        .apks()
+                        .upload(
+                            packageName=package,
+                            editId=edit_id,
+                            media_body=str(path),
+                            media_mime_type=mime,
+                        )
+                        .execute(num_retries=self._upload_retries)
+                    )
             version_code = uploaded.get("versionCode") or release.version_code
 
             # 大 AAB 上传后需等待 processing 完成
