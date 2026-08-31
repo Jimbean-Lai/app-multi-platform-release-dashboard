@@ -20,7 +20,7 @@ from ..models import AuditState, Platform, Release, SubmitResult, StoreStatus, u
 
 _ANDROIDPUBLISHER_SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 _UPLOAD_TIMEOUT = 1800  # 秒，单次 socket 读/写超时（大 AAB 上传，按需在凭证里覆盖）
-_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 分块上传每块 8MB（避免一次性整包导致 socket 写超时）
+_UPLOAD_CHUNK_SIZE = 2 * 1024 * 1024  # 分块上传每块 2MB（网络 0.2MB/s 时约 10s 更新一次进度）
 _UPLOAD_MAX_RETRIES = 5  # 上传失败自动重试次数
 
 
