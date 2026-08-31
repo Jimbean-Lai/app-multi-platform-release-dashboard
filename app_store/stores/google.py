@@ -19,11 +19,13 @@ from ..base import StoreAdapter, StoreError
 from ..models import AuditState, Platform, Release, SubmitResult, StoreStatus, utcnow_iso
 
 _ANDROIDPUBLISHER_SCOPE = "https://www.googleapis.com/auth/androidpublisher"
-_UPLOAD_TIMEOUT = 600  # 秒，大 AAB 上传
+_UPLOAD_TIMEOUT = 1800  # 秒，单次 socket 读/写超时（大 AAB 上传，按需在凭证里覆盖）
+_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 分块上传每块 8MB（避免一次性整包导致 socket 写超时）
+_UPLOAD_MAX_RETRIES = 5  # 上传失败自动重试次数
 
 # 上传 AAB 后是否需要等 processing 完成再 commit（大包 1-3 分钟）
 _PROCESSING_POLL_SECONDS = 5
-_PROCESSING_MAX_WAIT = 180
+_PROCESSING_MAX_WAIT = 300
 
 
 class GoogleAdapter(StoreAdapter):
@@ -35,6 +37,8 @@ class GoogleAdapter(StoreAdapter):
     def __init__(self, credentials: Dict[str, Any]) -> None:
         super().__init__(credentials)
         self._upload_timeout = int(self.credentials.get("upload_timeout", _UPLOAD_TIMEOUT))
+        self._upload_chunk = int(self.credentials.get("upload_chunk_size", _UPLOAD_CHUNK_SIZE))
+        self._upload_retries = int(self.credentials.get("upload_max_retries", _UPLOAD_MAX_RETRIES))
         self._apps = self.credentials.get("apps") or {}
 
     def _cred_for(self, pkg: str) -> Dict[str, Any]:
@@ -87,7 +91,8 @@ class GoogleAdapter(StoreAdapter):
         # 超时加大：上传大 AAB/APK 需要
         import httplib2
         from google_auth_httplib2 import AuthorizedHttp
-        http = httplib2.Http(timeout=self._upload_timeout)
+        http = httplib2.Http(timeout=self._upload_timeout,
+                             block_size=self._upload_chunk)
         auth_http = AuthorizedHttp(scoped, http=http)
         return build("androidpublisher", "v3", http=auth_http, cache_discovery=False)
 
@@ -109,6 +114,13 @@ class GoogleAdapter(StoreAdapter):
 
         try:
             is_aab = path.suffix.lower() == ".aab"
+            media_mime = "application/octet-stream" if is_aab else "application/vnd.android.package-archive"
+            # 分块 resumable 上传 + 自动重试：解决大 AAB 一次性 socket 写超时
+            import googleapiclient.http
+            media = googleapiclient.http.MediaFileUpload(
+                str(path), mimetype=media_mime,
+                chunksize=self._upload_chunk, resumable=True,
+            )
             if is_aab:
                 uploaded = (
                     service.edits()
@@ -116,10 +128,10 @@ class GoogleAdapter(StoreAdapter):
                     .upload(
                         packageName=package,
                         editId=edit_id,
-                        media_body=str(path),
-                        media_mime_type="application/octet-stream",
+                        media_body=media,
+                        media_mime_type=media_mime,
                     )
-                    .execute()
+                    .execute(num_retries=self._upload_retries)
                 )
             else:
                 uploaded = (
@@ -128,10 +140,10 @@ class GoogleAdapter(StoreAdapter):
                     .upload(
                         packageName=package,
                         editId=edit_id,
-                        media_body=str(path),
-                        media_mime_type="application/vnd.android.package-archive",
+                        media_body=media,
+                        media_mime_type=media_mime,
                     )
-                    .execute()
+                    .execute(num_retries=self._upload_retries)
                 )
             version_code = uploaded.get("versionCode") or release.version_code
 
