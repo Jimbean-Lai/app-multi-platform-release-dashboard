@@ -91,8 +91,8 @@ class GoogleAdapter(StoreAdapter):
         # 超时加大：上传大 AAB/APK 需要
         import httplib2
         from google_auth_httplib2 import AuthorizedHttp
-        http = httplib2.Http(timeout=self._upload_timeout,
-                             block_size=self._upload_chunk)
+        # httplib2 0.32 不支持 block_size 参数，仅加大 timeout
+        http = httplib2.Http(timeout=self._upload_timeout)
         auth_http = AuthorizedHttp(scoped, http=http)
         return build("androidpublisher", "v3", http=auth_http, cache_discovery=False)
 
