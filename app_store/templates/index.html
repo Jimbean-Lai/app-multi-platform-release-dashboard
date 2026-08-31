@@ -100,7 +100,6 @@ label{display:block;color:var(--mut);font-size:11px;margin:8px 0 3px}
     <div id=progress class=hide><div class=card>
       <div style=display:flex;justify-content:space-between;align-items:start;gap:8px><div><b style=font-size:14px id=tinfo></b><div id=tmeta></div></div><button class="secondary sm" onclick=stopPoll() id=tclose style=display:none>×</button></div>
       <div id=tstage></div>
-      <div id=tup style="font-size:12px;color:var(--acc);margin-top:5px;min-height:16px"></div>
       <div id=tsteps></div>
     </div></div>
     <div class=scroll>
@@ -196,8 +195,6 @@ $("tmeta").innerHTML=ps.join("");
 if(t.status==="done"){$("tstage").textContent="✅ 全部完成"}
 else if(t.status==="error"){$("tstage").textContent="❌ 有错误"}
 else{$("tstage").textContent=t.stage||"处理中…"}
-// === 上传进度：sent/total ===
-var upEl=$("tup");if(upEl){var up=t.upload;if(up&&up.sent!=null){var mb1=(up.sent/1048576).toFixed(1),mb2=(up.total/1048576).toFixed(1);upEl.textContent="⬆ 上传中 "+mb1+"MB / "+mb2+"MB ("+up.pct+")"}else if(t.status==="done"||t.status==="error"){upEl.textContent=""}}
 // === 步骤列表：已完成✓ / 当前⚡ / 最终✓✗ ===
 var se=$("tsteps");if(t.steps&&t.steps.length>se.childNodes.length){var sl=t.steps,li=sl.length-1;
 se.innerHTML=sl.map(function(s,i){var icon,cls;

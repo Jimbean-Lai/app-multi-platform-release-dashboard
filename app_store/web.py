@@ -221,11 +221,12 @@ def _publish_worker(tid: str):
                 if problems:
                     raise StoreError("；".join(problems))
                 _step(tid, f"  {key}: 凭证校验通过")
-                # 注入上传进度回调（Google 等适配器会读取并实时回传大小）
+                # 注入上传进度回调（只更新 upload 字段，不碰 stage，避免重复显示）
                 release.metadata["_progress_cb"] = lambda sent, total: _update(
-                    tid, stage=f"上传中 {sent/1024/1024:.1f}MB / {total/1024/1024:.1f}MB",
-                    upload={"sent": sent, "total": total, "pct": f"{100*sent/(total or 1):.0f}%"},
+                    tid, upload={"sent": sent, "total": total, "pct": f"{100*sent/(total or 1):.0f}%"},
                 )
+                # 步骤回调：适配器在传包开始/完成时追加步骤（前端 ✓/⚡ 指示）
+                release.metadata["_step_cb"] = lambda msg: _step(tid, f"  {key}: {msg}")
                 res = adapter.publish(release, dry_run=dry_run)
                 ok = res.ok
                 results.append({"platform": key, "ok": ok, "message": res.message, "remote_reference": res.remote_reference, "state": res.state.value})
