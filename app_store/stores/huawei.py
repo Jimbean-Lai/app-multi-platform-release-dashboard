@@ -169,6 +169,7 @@ class HuaweiAdapter(StoreAdapter):
 
     # ---------- 发布 ----------
     def publish(self, release: Release, dry_run: bool = False) -> SubmitResult:
+        scb = (release.metadata or {}).get("_step_cb")
         # HarmonyOS 应用当前仅支持查询版本（发布需在 AGC 控制台手动操作）
         cred = self._cred_for(release.package_name)
         if cred.get("app_kind", "android") == "harmony":
@@ -181,6 +182,7 @@ class HuaweiAdapter(StoreAdapter):
         if not apk or not os.path.isfile(apk):
             raise StoreError(f"华为 APK 不存在: {apk}")
 
+        if scb: scb("获取华为 appId…")
         # 1) appid-list -> appId
         d = self._get("/api/publish/v2/appid-list", {"packageName": pkg}, pkg)
         appids = d.get("appids") or []
@@ -192,6 +194,7 @@ class HuaweiAdapter(StoreAdapter):
         if not app_id:
             raise StoreError(f"华为未找到 {pkg} 的 appId")
 
+        if scb: scb("获取华为 OBS 上传地址…")
         # 2) upload-url/for-obs
         file_size = os.path.getsize(apk)
         h = hashlib.sha256()
@@ -217,6 +220,7 @@ class HuaweiAdapter(StoreAdapter):
         if isinstance(obs_headers, str):
             obs_headers = json.loads(obs_headers) if obs_headers else {}
 
+        if scb: scb("上传 APK 到华为 OBS…")
         # 3) PUT 上传到 OBS
         import requests
         with open(apk, "rb") as f:
@@ -224,6 +228,7 @@ class HuaweiAdapter(StoreAdapter):
         if r_obs.status_code not in (200, 201):
             raise StoreError(f"华为 OBS 上传失败: {r_obs.status_code} {r_obs.text[:200]}")
 
+        if scb: scb("提交发布到华为 AppGallery…")
         # 4) 提交发布（支持定时）
         meta = release.metadata or {}
         submit_query = {"appId": app_id, "releaseType": 1}

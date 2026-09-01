@@ -104,6 +104,7 @@ class VivoAdapter(StoreAdapter):
         return payload
 
     def publish(self, release: Release, dry_run: bool = False) -> SubmitResult:
+        scb = (release.metadata or {}).get("_step_cb")
         if dry_run:
             return SubmitResult(self.platform, True, "vivo: dry-run 通过", state=AuditState.DRAFT)
 
@@ -111,12 +112,14 @@ class VivoAdapter(StoreAdapter):
         if not apk or not os.path.isfile(apk):
             raise StoreError(f"vivo APK 不存在: {apk}")
 
+        if scb: scb("上传 APK 到 vivo…")
         # 1) 上传 APK 拿流水号（multipart）: app.upload.apk.app
         up_resp = self._upload_apk(apk, release.package_name)
         serial = up_resp.get("serialnumber") or ""
         if not serial:
             raise StoreError(f"vivo 上传 APK 未返回 serialnumber: {up_resp}")
 
+        if scb: scb("提交更新到 vivo…")
         # 2) 应用更新（同步）: app.sync.update.app
         meta = release.metadata or {}
         params = {

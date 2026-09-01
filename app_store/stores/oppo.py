@@ -112,16 +112,19 @@ class OPPOAdapter(StoreAdapter):
         return r["data"]["url"] if isinstance(r.get("data"), dict) else r["data"]
 
     def publish(self, release: Release, dry_run: bool = False) -> SubmitResult:
+        scb = (release.metadata or {}).get("_step_cb")
         if dry_run:
             return SubmitResult(self.platform, True, "OPPO: dry-run 通过", state=AuditState.DRAFT)
         apk = release.apk_path
         if not apk or not os.path.isfile(apk):
             raise StoreError(f"OPPO APK 不存在: {apk}")
 
+        if scb: scb("获取 OPPO 上传地址…")
         # 读取 OPPO 现网资料（更新时自动复用，避免重复填）
         existing = self._request("GET", "/resource/v1/app/info", data={"pkg_name": release.package_name}, pkg=release.package_name).get("data") or {}
         meta = release.metadata or {}
         md5 = self._file_md5(apk)
+        if scb: scb("上传 APK 到 OPPO…")
         apk_url = self._upload_file(apk)
 
         params = {
@@ -140,6 +143,7 @@ class OPPOAdapter(StoreAdapter):
             "test_desc": meta.get("test_desc") or existing.get("test_desc", ""),
         }
 
+        if scb: scb("提交资料到 OPPO…")
         # 定时发布
         import datetime as _dt
         ot = meta.get("online_time") or meta.get("onlineTime") or (release.metadata or {}).get("online_time")
