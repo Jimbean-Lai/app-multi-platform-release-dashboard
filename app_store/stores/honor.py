@@ -84,6 +84,7 @@ class HonorAdapter(StoreAdapter):
         raise StoreError(f"荣耀未找到 {pkg} 的 appId（需先在平台创建并绑定包名）")
 
     def publish(self, release: Release, dry_run: bool = False) -> SubmitResult:
+        scb = (release.metadata or {}).get("_step_cb")
         if dry_run:
             return SubmitResult(self.platform, True, "荣耀: dry-run 通过", state=AuditState.DRAFT)
 
@@ -91,8 +92,10 @@ class HonorAdapter(StoreAdapter):
         if not apk or not os.path.isfile(apk):
             raise StoreError(f"荣耀 APK 不存在: {apk}")
 
+        if scb: scb("获取荣耀 appId…")
         app_id = self._get_app_id(release.package_name)
 
+        if scb: scb("获取荣耀上传 URL…")
         # 1) 获取文件上传 URL
         up = self._post(release.package_name, "/get-file-upload-url", {"appId": app_id, "fileList": [{"fileName": os.path.basename(apk)}]})
         # 响应结构按文档：data 里有上传路径与 objectId（具体字段需核对；此处尝试常见字段）
@@ -108,6 +111,7 @@ class HonorAdapter(StoreAdapter):
         if not upload_url:
             raise StoreError(f"荣耀上传配置缺 uploadUrl: {first}")
 
+        if scb: scb("上传 APK 到荣耀…")
         # 2) 上传文件（multipart，PUT/POST 视文档；默认 POST）
         import requests as req
         with open(apk, "rb") as f:
@@ -140,6 +144,7 @@ class HonorAdapter(StoreAdapter):
             publish_body["scheduledTime"] = _dt.datetime.fromtimestamp(ot_int / 1000).strftime("%Y-%m-%dT%H:%M:%S+0800")
         self._post(release.package_name, "/update-app-info", publish_body)
 
+        if scb: scb("提交审核到荣耀…")
         # 5) 提交审核
         audit = self._post(release.package_name, "/submit-audit", {"appId": app_id})
         release_id = audit.get("data", {}).get("releaseId", "") if isinstance(audit.get("data"), dict) else ""

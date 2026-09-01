@@ -115,6 +115,7 @@ class XiaomiAdapter(StoreAdapter):
         return payload
 
     def publish(self, release: Release, dry_run: bool = False) -> SubmitResult:
+        scb = (release.metadata or {}).get("_step_cb")
         if dry_run:
             return SubmitResult(
                 platform=self.platform, ok=True,
@@ -172,6 +173,7 @@ class XiaomiAdapter(StoreAdapter):
             "apk": (os.path.basename(apk), open(apk, "rb")),
         }
 
+        if scb: scb("签名并上传 APK 到小米…")
         encrypted = self._encrypt_by_public_key(json.dumps(sig_json, ensure_ascii=False), release.package_name)
         payload = self._post(
             PUSH_URL,
@@ -187,6 +189,7 @@ class XiaomiAdapter(StoreAdapter):
             except Exception:
                 pass
 
+        if scb: scb("小米发布完成")
         ok = payload.get("code") in (0, "0", 200, "200", 900, "900")
         return SubmitResult(
             platform=self.platform,
