@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from ..base import StoreAdapter, StoreError
 from ..models import AuditState, Platform, Release, SubmitResult, StoreStatus, utcnow_iso
+from ..upload_progress import make_multipart_monitor
 
 _IAM_URL = "https://iam.developer.honor.com/auth/token"
 _OPENAPI = "https://appmarket-openapi-drcn.cloud.honor.com/openapi/v1/publish"
@@ -114,8 +115,18 @@ class HonorAdapter(StoreAdapter):
         if scb: scb("上传 APK 到荣耀…")
         # 2) 上传文件（multipart，PUT/POST 视文档；默认 POST）
         import requests as req
-        with open(apk, "rb") as f:
-            up_resp = req.post(upload_url, files={"file": (os.path.basename(apk), f)}, timeout=600)
+        pc = (release.metadata or {}).get("_progress_cb")
+        if pc:
+            f = open(apk, "rb")
+            try:
+                fields = [("file", (os.path.basename(apk), f, "application/octet-stream"))]
+                body = make_multipart_monitor(fields, os.path.getsize(apk), pc)
+                up_resp = req.post(upload_url, data=body, headers={"Content-Type": body.content_type}, timeout=600)
+            finally:
+                f.close()
+        else:
+            with open(apk, "rb") as f:
+                up_resp = req.post(upload_url, files={"file": (os.path.basename(apk), f)}, timeout=600)
 
         # 3) 更新文件信息（绑定 objectId 到版本）
         self._post(release.package_name, "/update-file-info", {

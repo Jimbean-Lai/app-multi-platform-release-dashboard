@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 
 from ..base import StoreAdapter, StoreError
 from ..models import AuditState, Platform, Release, SubmitResult, StoreStatus, utcnow_iso
+from ..upload_progress import ProgressFile, make_multipart_monitor
 
 _DOMAIN = "https://oop-openapi-cn.heytapmobi.com"
 
@@ -99,13 +100,23 @@ class OPPOAdapter(StoreAdapter):
             raise StoreError(f"OPPO {path}: {payload.get('errmsg', payload)}")
         return payload
 
-    def _upload_file(self, file_path: str) -> str:
+    def _upload_file(self, file_path: str, cb=None) -> str:
         import requests as req
         cfg = self._request("GET", "/resource/v1/upload/get-upload-url")
         upload_url = cfg["data"]["upload_url"]
         upload_sign = cfg["data"]["sign"]
-        with open(file_path, "rb") as f:
-            resp = req.post(upload_url, data={"sign": upload_sign}, files={"file": (os.path.basename(file_path), f)}, timeout=600)
+        file_size = os.path.getsize(file_path)
+        if cb:
+            with open(file_path, "rb") as f:
+                fields = [
+                    ("sign", upload_sign),
+                    ("file", (os.path.basename(file_path), f, "application/octet-stream")),
+                ]
+                body = make_multipart_monitor(fields, file_size, cb)
+                resp = req.post(upload_url, data=body, headers={"Content-Type": body.content_type}, timeout=600)
+        else:
+            with open(file_path, "rb") as f:
+                resp = req.post(upload_url, data={"sign": upload_sign}, files={"file": (os.path.basename(file_path), f)}, timeout=600)
         r = resp.json()
         if r.get("errno") != 0:
             raise StoreError(f"OPPO 上传错误: {r}")
@@ -125,7 +136,8 @@ class OPPOAdapter(StoreAdapter):
         meta = release.metadata or {}
         md5 = self._file_md5(apk)
         if scb: scb("上传 APK 到 OPPO…")
-        apk_url = self._upload_file(apk)
+        pc = (release.metadata or {}).get("_progress_cb")
+        apk_url = self._upload_file(apk, cb=pc)
 
         params = {
             "pkg_name": release.package_name,
