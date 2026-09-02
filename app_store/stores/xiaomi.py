@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 
 from ..base import StoreAdapter, StoreError
 from ..models import AuditState, Platform, Release, SubmitResult, StoreStatus, utcnow_iso
+from ..upload_progress import make_multipart_monitor
 
 # 官方示例常量
 DOMAIN = "https://api.developer.xiaomi.com/devupload"
@@ -169,25 +170,30 @@ class XiaomiAdapter(StoreAdapter):
         })
         sig_json["sig"].append({"name": "apk", "hash": _file_md5(apk)})
 
-        files: Dict[str, Any] = {
-            "apk": (os.path.basename(apk), open(apk, "rb")),
-        }
-
+        pc = (release.metadata or {}).get("_progress_cb")
         if scb: scb("签名并上传 APK 到小米…")
         encrypted = self._encrypt_by_public_key(json.dumps(sig_json, ensure_ascii=False), release.package_name)
-        payload = self._post(
-            PUSH_URL,
-            data={
-                "RequestData": json.dumps(request_data, ensure_ascii=False),
-                "SIG": encrypted,
-            },
-            files=files,
-        )
-        for f in files.values():
+        req_data = {
+            "RequestData": json.dumps(request_data, ensure_ascii=False),
+            "SIG": encrypted,
+        }
+        file_size = os.path.getsize(apk)
+        if pc:
+            import requests as _req
+            f = open(apk, "rb")
             try:
-                f[1].close()
-            except Exception:
-                pass
+                fields = list(req_data.items()) + [
+                    ("apk", (os.path.basename(apk), f, "application/octet-stream")),
+                ]
+                body = make_multipart_monitor(fields, file_size, pc)
+                resp = _req.post(PUSH_URL, data=body, headers={"Content-Type": body.content_type}, timeout=300)
+            finally:
+                f.close()
+            payload = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+        else:
+            with open(apk, "rb") as f:
+                files: Dict[str, Any] = {"apk": (os.path.basename(apk), f)}
+                payload = self._post(PUSH_URL, data=req_data, files=files)
 
         if scb: scb("小米发布完成")
         ok = payload.get("code") in (0, "0", 200, "200", 900, "900")

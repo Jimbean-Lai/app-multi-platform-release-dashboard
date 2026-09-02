@@ -27,6 +27,7 @@ from typing import Any, Dict, List
 
 from ..base import StoreAdapter, StoreError
 from ..models import AuditState, Platform, Release, SubmitResult, StoreStatus, utcnow_iso
+from ..upload_progress import make_multipart_monitor, ProgressFile
 
 _DOMAIN = "https://developer-api.vivo.com.cn/router/rest"
 
@@ -114,7 +115,8 @@ class VivoAdapter(StoreAdapter):
 
         if scb: scb("上传 APK 到 vivo…")
         # 1) 上传 APK 拿流水号（multipart）: app.upload.apk.app
-        up_resp = self._upload_apk(apk, release.package_name)
+        pc = (release.metadata or {}).get("_progress_cb")
+        up_resp = self._upload_apk(apk, release.package_name, cb=pc)
         serial = up_resp.get("serialnumber") or ""
         if not serial:
             raise StoreError(f"vivo 上传 APK 未返回 serialnumber: {up_resp}")
@@ -152,7 +154,7 @@ class VivoAdapter(StoreAdapter):
                             remote_reference=payload.get("data", {}).get("task_id", "") or serial,
                             state=AuditState.SUBMITTED, raw=payload)
 
-    def _upload_apk(self, apk_path: str, package_name: str) -> dict:
+    def _upload_apk(self, apk_path: str, package_name: str, cb=None) -> dict:
         """通过 multipart 上传 APK 到 vivo，返回 serialnumber 等。"""
         import requests as req
         import time
@@ -170,9 +172,22 @@ class VivoAdapter(StoreAdapter):
             "fileMd5": md5,
         }
         params["sign"] = self._sign(params, secret)
-        with open(apk_path, "rb") as f:
-            files = {"file": (apk_path.split("/")[-1], f, "application/vnd.android.package-archive")}
-            resp = req.post(_DOMAIN, data=params, files=files, timeout=600)
+        file_size = os.path.getsize(apk_path)
+        if cb:
+            # multipart 用 MultipartEncoderMonitor 流式 → 实时进度
+            f = open(apk_path, "rb")
+            try:
+                fields = list(params.items()) + [
+                    ("file", (apk_path.split("/")[-1], f, "application/vnd.android.package-archive")),
+                ]
+                body = make_multipart_monitor(fields, file_size, cb)
+                resp = req.post(_DOMAIN, data=body, headers={"Content-Type": body.content_type}, timeout=600)
+            finally:
+                f.close()
+        else:
+            with open(apk_path, "rb") as f:
+                files = {"file": (apk_path.split("/")[-1], f, "application/vnd.android.package-archive")}
+                resp = req.post(_DOMAIN, data=params, files=files, timeout=600)
         try:
             payload = resp.json()
         except Exception:

@@ -19,6 +19,7 @@ from typing import Any, Dict, List
 
 from ..base import StoreAdapter, StoreError
 from ..models import AuditState, Platform, Release, SubmitResult, StoreStatus, utcnow_iso
+from ..upload_progress import ProgressFile
 
 _DOMAIN = "https://connect-api.cloud.huawei.com"
 
@@ -221,10 +222,18 @@ class HuaweiAdapter(StoreAdapter):
             obs_headers = json.loads(obs_headers) if obs_headers else {}
 
         if scb: scb("上传 APK 到华为 OBS…")
-        # 3) PUT 上传到 OBS
+        # 3) PUT 上传到 OBS（data=流式读 → ProgressFile 报实时进度）
         import requests
-        with open(apk, "rb") as f:
-            r_obs = requests.put(obs_url, data=f, headers=obs_headers, timeout=600)
+        pc = (release.metadata or {}).get("_progress_cb")
+        if pc:
+            pf = ProgressFile(apk, os.path.getsize(apk), pc)
+            try:
+                r_obs = requests.put(obs_url, data=pf, headers=obs_headers, timeout=600)
+            finally:
+                pf.close()
+        else:
+            with open(apk, "rb") as f:
+                r_obs = requests.put(obs_url, data=f, headers=obs_headers, timeout=600)
         if r_obs.status_code not in (200, 201):
             raise StoreError(f"华为 OBS 上传失败: {r_obs.status_code} {r_obs.text[:200]}")
 
