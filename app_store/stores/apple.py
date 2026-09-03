@@ -55,7 +55,9 @@ class AppleAdapter(StoreAdapter):
             param["bundleId"] = sid
         url = "https://itunes.apple.com/lookup?" + urllib.parse.urlencode(param)
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            # 注意：带浏览器 UA 时 iTunes Lookup 会返回旧版本（经 Apple CDN 缓存/本地化），
+            # 去掉 UA 才返回最新线上版本（实测：UA=Mozilla→4.18.2 旧版；无 UA→419.0 最新即 4.19.0）
+            req = urllib.request.Request(url)
             with urllib.request.urlopen(req, timeout=30) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
         except Exception as e:
