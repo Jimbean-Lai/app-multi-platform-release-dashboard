@@ -3,10 +3,12 @@
 
 发布流程：
 1. appid-list -> 获取 appId
-2. upload-url/for-obs -> 获取 OBS 上传 URL + objectId
-3. PUT 上传 APK 到 OBS
-4. app-submit -> 提交发布（支持 releaseTime 定时）
-5. app-info -> 查询已上架版本
+2. upload-url -> 获取上传地址 + authCode
+3. multipart 直传 APK 到 FileServer
+4. PUT app-file-info -> 绑定上传文件到版本（fileType=5 APK）
+5. PUT app-info -> 更新更新说明（可选）
+6. app-submit -> 提交发布（APK 解析中自动轮询重试）
+7. app-info -> 查询已上架版本
 """
 from __future__ import annotations
 
@@ -87,6 +89,59 @@ class HuaweiAdapter(StoreAdapter):
  raise StoreError("华为 " + path + ": " + str(d))
  return d
 
+ def _put(self, path: str, pkg: str, query: dict = None, body: dict = None) -> dict:
+ """PUT 请求（app-file-info / app-info 用 PUT）。"""
+ import requests
+ url = _DOMAIN + path
+ if query:
+ url += "?" + urllib.parse.urlencode(query)
+ r = requests.put(url, json=body, headers=self._headers(pkg), timeout=60)
+ d = r.json()
+ if d.get("ret", {}).get("code") != 0:
+ raise StoreError("华为 " + path + ": " + str(d))
+ return d
+
+ def _submit_with_retry(self, path: str, pkg: str, query: dict = None,
+ max_attempts: int = 8, interval: int = 30) -> dict:
+ """提交发布，APK 解析中(204144660 parsing / 204144727 compiling)时轮询重试。
+
+ 参考：华为解析 APK 需 1-2 分钟（大包更久），报解析中错误应重试
+ 而非直接失败。每次失败都提示去 AGC 后台完成。
+ """
+ import time as _t
+ import requests
+ last_payload: dict = {}
+ for attempt in range(max_attempts):
+ url = _DOMAIN + path
+ if query:
+ url += "?" + urllib.parse.urlencode(query)
+ r = requests.post(url, json={}, headers=self._headers(pkg), timeout=60)
+ try:
+ d = r.json()
+ except Exception:
+ raise StoreError(f"华为提交返回非JSON: {r.status_code} {r.text[:200]}")
+ last_payload = d
+ ret = d.get("ret") or {}
+ code = ret.get("code")
+ if code == 0:
+ return d
+ msg = str(ret.get("msg", "") or ret.get("message", "")).lower()
+ # 解析中/编译中 → 重试
+ parsing = (code in (204144660, 204144727)) and (
+ "parsing" in msg or "parse" in msg or "解析" in msg or
+ "compil" in msg or "编译" in msg or "try again" in msg
+ )
+ if not parsing:
+ raise StoreError(
+ f"华为 {path}: [{code}] {ret.get('msg', ret)}"
+ f"（APK 已上传成功，若需手动可在 AGC 后台完成：https://developer.huawei.com/consumer/cn/console）"
+ )
+ if attempt < max_attempts - 1:
+ _t.sleep(interval)
+ raise StoreError(
+ f"华为提交超时（APK 仍在处理，可在 AGC 后台完成：https://developer.huawei.com/consumer/cn/console）"
+ )
+
  # ---------- 查询 ----------
  def query_status(self, package_name: str, harmony_package: str = "") -> StoreStatus:
  """查询华为应用状态。
@@ -135,7 +190,7 @@ class HuaweiAdapter(StoreAdapter):
  return s
 
  def _query_android(self, pkg: str, app_id: str) -> StoreStatus:
- """Android：v2 app-info 查询已上架版本。"""
+ """Android：v2 app-info 查询版本状态。"""
  dd = self._get("/api/publish/v2/app-info", {"appId": app_id, "lang": "zh-CN"}, pkg)
  ai = dd.get("appInfo") or {}
  version = ai.get("onShelfVersionNumber") or ai.get("versionNumber") or ""
@@ -143,7 +198,18 @@ class HuaweiAdapter(StoreAdapter):
  release_state = ai.get("releaseState")
  names = [str(version)] if version else []
  codes = [int(vcode)] if vcode else []
- state = AuditState.PUBLISHED if names else AuditState.UNKNOWN
+ # releaseState: 0=已上架 1=审核不通过 2=已下架 3=待上架 4=审核中
+ # 5=升级审核中 6=申请下架 7=草稿 8=升级审核不通过 12=预审中
+ if release_state in (4, 5, 12):
+ state = AuditState.REVIEWING
+ elif release_state in (0, 3):
+ state = AuditState.PUBLISHED
+ elif release_state in (1, 8):
+ state = AuditState.REJECTED
+ elif release_state == 7:
+ state = AuditState.DRAFT
+ else:
+ state = AuditState.UNKNOWN
  return StoreStatus(
  self.platform, pkg, state,
  live_version_names=names, live_version_codes=codes,
@@ -195,51 +261,69 @@ class HuaweiAdapter(StoreAdapter):
  if not app_id:
  raise StoreError(f"华为未找到 {pkg} 的 appId")
 
- if scb: scb("获取华为 OBS 上传地址…")
- # 2) upload-url/for-obs
+ if scb: scb("获取华为上传地址…")
+ # 2) upload-url（ 参考：GET upload-url 返回 uploadUrl+authCode）
+ import requests
  file_size = os.path.getsize(apk)
- h = hashlib.sha256()
- with open(apk, "rb") as f:
- for c in iter(lambda: f.read(1 << 16), b""):
- h.update(c)
- sha256 = h.hexdigest()
  up = self._get(
- "/api/publish/v2/upload-url/for-obs",
- {
- "appId": app_id,
- "fileName": os.path.basename(apk),
- "sha256": sha256,
- "contentLength": file_size,
- "releaseType": 1,
- },
+ "/api/publish/v2/upload-url",
+ {"appId": app_id, "releaseType": 1, "suffix": "apk"},
  pkg,
  )
- url_info = up.get("urlInfo") or {}
- # 华为返回字段：url / objectId / method / headers（注意不是 uploadUrl/headerInfo）
- obs_url = url_info.get("url") or url_info.get("uploadUrl") or ""
- object_id = url_info.get("objectId") or ""
- obs_headers = url_info.get("headers") or url_info.get("headerInfo") or {}
- if isinstance(obs_headers, str):
- obs_headers = json.loads(obs_headers) if obs_headers else {}
+ upload_url = up.get("uploadUrl") or ""
+ auth_code = up.get("authCode") or ""
+ if not upload_url:
+ raise StoreError(f"华为未返回上传地址: {up}")
 
- if scb: scb("上传 APK 到华为 OBS…")
- # 3) PUT 上传到 OBS（data=流式读 → ProgressFile 报实时进度）
- import requests
+ if scb: scb("上传 APK 到华为…")
+ # 3) multipart 直传（ 参考：fields authCode/fileCount/name/parseType + file）
  pc = (release.metadata or {}).get("_progress_cb")
+ apk_name = os.path.basename(apk)
  if pc:
- pf = ProgressFile(apk, os.path.getsize(apk), pc)
+ f = open(apk, "rb")
  try:
- r_obs = requests.put(obs_url, data=pf, headers=obs_headers, timeout=600)
+ fields = [
+ ("authCode", auth_code),
+ ("fileCount", "1"),
+ ("name", apk_name),
+ ("parseType", "0"),
+ ]
+ # 有进度回调时用 Monitor 流式
+ body = make_multipart_monitor(fields + [("file", (apk_name, f, "application/octet-stream"))], file_size, pc)
+ r_up = requests.post(upload_url, data=body, headers={"Content-Type": body.content_type}, timeout=600)
  finally:
- pf.close()
+ f.close()
  else:
  with open(apk, "rb") as f:
- r_obs = requests.put(obs_url, data=f, headers=obs_headers, timeout=600)
- if r_obs.status_code not in (200, 201):
- raise StoreError(f"华为 OBS 上传失败: {r_obs.status_code} {r_obs.text[:200]}")
+ r_up = requests.post(upload_url, data={"authCode": auth_code, "fileCount": "1", "name": apk_name, "parseType": "0"}, files={"file": (apk_name, f)}, timeout=600)
+ up_json = {}
+ try:
+ up_json = r_up.json()
+ except Exception:
+ raise StoreError(f"华为上传返回非JSON: {r_up.status_code} {r_up.text[:200]}")
+ file_rsp = (up_json.get("result") or {}).get("UploadFileRsp") or {}
+ if file_rsp.get("ifSuccess") != 1 and up_json.get("result", {}).get("resultCode") != "0":
+ raise StoreError(f"华为上传失败: {r_up.text[:300]}")
+ file_list = file_rsp.get("fileInfoList") or []
+ if not file_list:
+ raise StoreError(f"华为上传未返回文件信息: {r_up.text[:300]}")
+ file_dest_url = file_list[0].get("fileDestUlr") or file_list[0].get("fileDestUrl") or ""
+ if not file_dest_url:
+ raise StoreError(f"华为上传缺 fileDestUrl: {r_up.text[:300]}")
 
+ # 4) 绑定文件到版本（ 参考：PUT app-file-info, fileType=5 APK）
+ if scb: scb("绑定 APK 文件到版本…")
+ self._put("/api/publish/v2/app-file-info", pkg, query={"appId": app_id, "releaseType": 1}, body={
+ "fileType": 5,
+ "files": [{"fileName": apk_name, "fileDestUrl": file_dest_url}],
+ })
+
+ # 5) 更新更新说明（可选）
+ if release.release_notes:
+ self._put("/api/publish/v2/app-info", pkg, query={"appId": app_id, "releaseType": 1}, body={"newFeatures": release.release_notes})
+
+ # 6) 提交发布（支持定时）+ 解析中轮询
  if scb: scb("提交发布到华为 AppGallery…")
- # 4) 提交发布（支持定时）
  meta = release.metadata or {}
  submit_query = {"appId": app_id, "releaseType": 1}
  ot = meta.get("online_time") or release.metadata.get("online_time")
@@ -256,13 +340,12 @@ class HuaweiAdapter(StoreAdapter):
  submit_query["releaseTime"] = _dt.datetime.fromtimestamp(ot_int / 1000).strftime(
  "%Y-%m-%dT%H:%M:%S+0800"
  )
-
- payload = self._post("/api/publish/v2/app-submit", pkg, query=submit_query)
+ payload = self._submit_with_retry("/api/publish/v2/app-submit", pkg, query=submit_query)
  return SubmitResult(
  self.platform,
  True,
  f"华为: {payload.get('ret', {}).get('msg', '提交成功')}",
- remote_reference=object_id,
+ remote_reference=str(file_dest_url),
  state=AuditState.SUBMITTED,
  raw=payload,
  )

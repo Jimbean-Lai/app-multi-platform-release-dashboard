@@ -215,15 +215,24 @@ class VivoAdapter(StoreAdapter):
         online_type = data.get("onlineType")
 
         state = AuditState.UNKNOWN
-        # status: 从文档推测（部分 0=审核中 1=已上架 3=?）; 实测 status=3 saleStatus=1 是已上架
+        # status: 0=草稿/空 1=审核中 2=审核中 3=已上架; saleStatus=0 不可售 1=可售
         if status == 3 or sale == 1:
             state = AuditState.PUBLISHED
-        elif status in (1, 2) and status != 3:
+        elif status in (1, 2):
             state = AuditState.REVIEWING
         elif status == 0:
             state = AuditState.DRAFT
+        # 若 versionName 为空但状态非草稿 → 可能仍在处理中
+        if state in (AuditState.PUBLISHED, AuditState.REVIEWING) and not version:
+            state = AuditState.UNKNOWN
 
         msgs = []
+        if state == AuditState.REVIEWING:
+            msgs.append("审核中")
+        elif state == AuditState.PUBLISHED:
+            msgs.append("已上架")
+        elif state == AuditState.DRAFT:
+            msgs.append("草稿")
         if update_desc:
             msgs.append(f"更新说明: {update_desc}")
         if online_type == 2:
