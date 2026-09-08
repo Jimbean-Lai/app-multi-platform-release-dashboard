@@ -154,6 +154,13 @@ class OPPOAdapter(StoreAdapter):
             "icon_url": (self._upload_file(meta["icon"]) if meta.get("icon") else existing.get("icon_url", "")),
             "pic_url": (self._upload_images(meta["screenshots"]) if meta.get("screenshots") else existing.get("pic_url", "")),
             "test_desc": meta.get("test_desc") or existing.get("test_desc", ""),
+        # 商务联系人（OPPO 必填；优先 meta 配置，其次复用现网资料）
+        "business_username": meta.get("business_username") or existing.get("business_username", ""),
+        "business_email": meta.get("business_email") or existing.get("business_email", ""),
+        "business_mobile": meta.get("business_mobile") or existing.get("business_mobile", ""),
+        "business_qq": meta.get("business_qq") or existing.get("business_qq", ""),
+        "business_wx": meta.get("business_wx") or existing.get("business_wx", ""),
+        "business_address": meta.get("business_address") or existing.get("business_address", ""),
         }
 
         if scb: scb("提交资料到 OPPO…")
