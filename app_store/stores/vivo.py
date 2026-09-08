@@ -63,6 +63,14 @@ class VivoAdapter(StoreAdapter):
         s = "&".join(f"{k}={v}" for k, v in items)
         return hmac.new(secret.encode(), s.encode(), hashlib.sha256).hexdigest()
 
+    @staticmethod
+    def _md5(path: str) -> str:
+        h = hashlib.md5()
+        with open(path, "rb") as f:
+            for c in iter(lambda: f.read(65536), b""):
+                h.update(c)
+        return h.hexdigest()
+
     def _call(self, method: str, biz: Dict[str, Any], files: Any = None, pkg: str = "") -> Dict[str, Any]:
         """组装公共参数+业务参数，签名后 POST。"""
         import requests as req
