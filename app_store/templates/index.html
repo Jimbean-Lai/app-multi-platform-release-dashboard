@@ -41,6 +41,8 @@ main{flex:1;overflow-y:auto;padding:18px 22px 40px;background:var(--bg)}
 .input-row{display:flex;gap:6px;margin-bottom:8px;align-items:center}
 .input-row input{flex:1;background:#0d1626;color:var(--txt);border:1px solid var(--line);border-radius:7px;padding:7px 9px;font-size:12.5px;min-width:0}
 input,select,textarea{background:#0d1626;color:var(--txt);border:1px solid var(--line);border-radius:7px;padding:7px 9px;font-size:12.5px;width:100%}
+input[type=datetime-local]{background:#fff;color:#1d1d1f;border:1px solid #d2d2d7;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:500;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",sans-serif;min-height:28px;box-shadow:0 1px 3px rgba(0,0,0,.08);-webkit-appearance:none;appearance:none}
+input[type=datetime-local]::-webkit-calendar-picker-indicator{filter:invert(.4);cursor:pointer;padding:4px}
 textarea{min-height:48px;resize:vertical}
 form-row{display:flex;gap:10px}
 form-row>*{flex:1}
