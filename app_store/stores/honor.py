@@ -315,7 +315,7 @@ class HonorAdapter(StoreAdapter):
         elif state == AuditState.DRAFT:
             note = "草稿"
         elif state == AuditState.PUBLISHED:
-            note = "已上架"
+            note = ""  # 已上架由徽章/已上架版本行表达，不进审核状态
 
         msgs = []
         if release_id: msgs.append(f"releaseId: {release_id}")

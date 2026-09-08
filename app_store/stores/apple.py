@@ -124,7 +124,7 @@ class AppleAdapter(StoreAdapter):
         if not version:
             version = r0.get("version") or ""
         state = AuditState.PUBLISHED if version else AuditState.UNKNOWN
-        note = "已上架" if version else ""
+        note = ""  # 已上架由徽章/已上架版本行表达，不进审核状态
         return StoreStatus(
             platform=self.platform, package_name=package_name, state=state,
             live_version_names=[version] if version else [],

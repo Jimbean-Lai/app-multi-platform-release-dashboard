@@ -242,7 +242,7 @@ class VivoAdapter(StoreAdapter):
         elif state == AuditState.REVIEWING:
             note = "审核中"
         elif state == AuditState.PUBLISHED:
-            note = "已上架"
+            note = ""  # 已上架由徽章/已上架版本行表达，不进审核状态
         elif state == AuditState.DRAFT:
             note = "草稿"
         msgs = []

@@ -245,7 +245,7 @@ class HuaweiAdapter(StoreAdapter):
  elif release_state == 3:
  note = f"{curr_version} 审核通过" if curr_version else "审核通过"
  elif release_state == 0:
- note = "已上架"
+ note = "" # 已上架由徽章/已上架版本行表达，不进审核状态
  return StoreStatus(
  self.platform, pkg, state,
  live_version_names=live_names, live_version_codes=live_codes,
@@ -286,7 +286,7 @@ class HuaweiAdapter(StoreAdapter):
  elif release_state == 3:
  note = f"{curr_version} 审核通过" if curr_version else "审核通过"
  elif release_state == 0:
- note = "已上架"
+ note = "" # 已上架由徽章/已上架版本行表达，不进审核状态
  return StoreStatus(
  self.platform, pkg, state,
  live_version_names=live_names, live_version_codes=codes,

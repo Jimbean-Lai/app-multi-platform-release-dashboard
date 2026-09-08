@@ -271,7 +271,7 @@ class OPPOAdapter(StoreAdapter):
         elif state == AuditState.DRAFT:
             note = "草稿"
         elif state == AuditState.PUBLISHED:
-            note = "已上架"
+            note = ""  # 已上架由徽章/已上架版本行表达，不进审核状态
 
         return StoreStatus(self.platform, package_name, state,
                            live_version_names=live_names,
