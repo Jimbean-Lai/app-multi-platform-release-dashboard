@@ -1,10 +1,27 @@
 # -*- coding: utf-8 -*-
-"""荣耀应用市场适配器（基于官方 API 传包服务指引实现）。
+"""荣耀应用市场适配器（基于荣耀官方 API 传包服务指引，doc 101359）。
 
 凭证：client_id / client_secret（管理中心>开放能力>凭证）
+官方文档：https://developer.honor.com/cn/doc/guides/101359
+本地存档：docs/honor_api_guide.txt
+
+发布流程（官方时序）：
+1. get-app-id              根据包名查 APPID
+2. get-app-detail          查应用详细信息（更新时复用现网资料）
+3. get-file-upload-url     获取文件上传路径（URL 带 ?appId=，Body 为 List<UploadFile>）
+4. file-upload             上传文件（multipart，?appId=&objectId=）
+5. update-file-info        绑定文件（bindingFileList）
+6. update-app-info         更新应用信息（复用现网 basicInfo）
+7. update-language-info    更新多语言信息（复用现网 languageInfo）
+8. submit-audit            提交审核（releaseType）
+
+关键字段：fileType=100(APK应用包)；APK 包名须与应用绑定包名一致，版本 >= 已上架。
 """
 # flake8: noqa
-import json, os, time
+import hashlib
+import json
+import os
+import time
 from typing import Any, Dict, List, Optional
 
 from ..base import StoreAdapter, StoreError
@@ -13,6 +30,9 @@ from ..upload_progress import make_multipart_monitor
 
 _IAM_URL = "https://iam.developer.honor.com/auth/token"
 _OPENAPI = "https://appmarket-openapi-drcn.cloud.honor.com/openapi/v1/publish"
+
+# 文件类型：100=APK 应用包（其余：1=图标 3=应用介绍截图 等，详见文档文件类型表）
+_FILE_TYPE_APK = 100
 
 
 class HonorAdapter(StoreAdapter):
@@ -66,11 +86,13 @@ class HonorAdapter(StoreAdapter):
             raise StoreError(f"荣耀 {path}: {d.get('msg', d)}")
         return d
 
-    def _post(self, pkg: str, path: str, body: Dict[str, Any]) -> Dict[str, Any]:
+    def _post(self, pkg: str, path: str, body: Any, query: Dict[str, Any] = None) -> Dict[str, Any]:
+        """POST JSON。query: 附加到 URL 的 query 参数（如 appId）。"""
         import requests as req
         tok = self._token(pkg)
         url = _OPENAPI + path
-        resp = req.post(url, json=body, headers={"Authorization": f"Bearer {tok}", "Content-Type": "application/json"}, timeout=120)
+        resp = req.post(url, json=body, params=query,
+                        headers={"Authorization": f"Bearer {tok}", "Content-Type": "application/json"}, timeout=120)
         d = resp.json()
         if d.get("code") != 0:
             raise StoreError(f"荣耀 {path}: {d.get('msg', d)}")
@@ -84,63 +106,140 @@ class HonorAdapter(StoreAdapter):
                 return int(a["appId"])
         raise StoreError(f"荣耀未找到 {pkg} 的 appId（需先在平台创建并绑定包名）")
 
+    def _get_app_detail(self, pkg: str, app_id: int) -> Dict[str, Any]:
+        """查询应用详细信息（更新时复用现网资料）。"""
+        d = self._get(pkg, "/get-app-detail", {"appId": app_id})
+        return d.get("data") or {}
+
+    def _file_sha256(self, path: str) -> str:
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for c in iter(lambda: f.read(65536), b""):
+                h.update(c)
+        return h.hexdigest()
+
     def publish(self, release: Release, dry_run: bool = False) -> SubmitResult:
-        scb = (release.metadata or {}).get("_step_cb")
         if dry_run:
             return SubmitResult(self.platform, True, "荣耀: dry-run 通过", state=AuditState.DRAFT)
 
+        scb = (release.metadata or {}).get("_step_cb")
+        pc = (release.metadata or {}).get("_progress_cb")
         apk = release.apk_path
         if not apk or not os.path.isfile(apk):
             raise StoreError(f"荣耀 APK 不存在: {apk}")
+        pkg = release.package_name
+        fs = os.path.getsize(apk)
+        apk_name = os.path.basename(apk)
 
+        # 0) 获取 APPID + 现网资料（更新应用复用）
         if scb: scb("获取荣耀 appId…")
-        app_id = self._get_app_id(release.package_name)
+        app_id = self._get_app_id(pkg)
+        if scb: scb("获取荣耀现网应用资料…")
+        detail = self._get_app_detail(pkg, app_id)
+        basic = detail.get("basicInfo") or {}
+        langs = detail.get("languageInfo") or []
+        old_publish = detail.get("publishInfo") or {}
 
+        # 1) 获取文件上传路径（URL 带 ?appId=，Body 为 List<UploadFile>）
         if scb: scb("获取荣耀上传 URL…")
-        # 1) 获取文件上传 URL
-        up = self._post(release.package_name, "/get-file-upload-url", {"appId": app_id, "fileList": [{"fileName": os.path.basename(apk)}]})
-        # 响应结构按文档：data 里有上传路径与 objectId（具体字段需核对；此处尝试常见字段）
+        up = self._post(pkg, "/get-file-upload-url", [{
+            "fileName": apk_name,
+            "fileType": _FILE_TYPE_APK,
+            "fileSize": fs,
+            "fileSha256": self._file_sha256(apk),
+        }], query={"appId": app_id})
         uploads = up.get("data") or []
-        if isinstance(uploads, dict):
-            uploads = uploads.get("fileList") or uploads.get("list") or []
         if not uploads:
-            raise StoreError(f"荣耀未返回上传配置: {up}")
-
+            raise StoreError(f"荣耀未返回上传路径: {up}")
         first = uploads[0] if isinstance(uploads, list) else uploads
-        upload_url = first.get("uploadUrl") or first.get("url") or ""
-        object_id = first.get("objectId") or first.get("objectID") or ""
-        if not upload_url:
-            raise StoreError(f"荣耀上传配置缺 uploadUrl: {first}")
+        upload_url = first.get("uploadUrl") or ""
+        object_id = first.get("objectId") or ""
+        if not upload_url or object_id is None:
+            raise StoreError(f"荣耀上传配置缺 uploadUrl/objectId: {first}")
 
+        # 2) 上传文件（uploadUrl 已含 appId+objectId，multipart file）
         if scb: scb("上传 APK 到荣耀…")
-        # 2) 上传文件（multipart，PUT/POST 视文档；默认 POST）
         import requests as req
-        pc = (release.metadata or {}).get("_progress_cb")
+        tok = self._token(pkg)
         if pc:
             f = open(apk, "rb")
             try:
-                fields = [("file", (os.path.basename(apk), f, "application/octet-stream"))]
-                body = make_multipart_monitor(fields, os.path.getsize(apk), pc)
-                up_resp = req.post(upload_url, data=body, headers={"Content-Type": body.content_type}, timeout=600)
+                fields = [("file", (apk_name, f, "application/vnd.android.package-archive"))]
+                body = make_multipart_monitor(fields, fs, pc)
+                up_resp = req.post(upload_url, data=body,
+                                   headers={"Authorization": f"Bearer {tok}", "Content-Type": body.content_type}, timeout=600)
             finally:
                 f.close()
         else:
             with open(apk, "rb") as f:
-                up_resp = req.post(upload_url, files={"file": (os.path.basename(apk), f)}, timeout=600)
+                up_resp = req.post(upload_url, files={"file": (apk_name, f, "application/vnd.android.package-archive")},
+                                   headers={"Authorization": f"Bearer {tok}"}, timeout=600)
+        up_d = up_resp.json()
+        if up_d.get("code") != 0:
+            raise StoreError(f"荣耀文件上传失败: {up_d.get('msg', up_d)}")
 
-        # 3) 更新文件信息（绑定 objectId 到版本）
-        self._post(release.package_name, "/update-file-info", {
-            "appId": app_id,
-            "fileList": [{"objectId": object_id, "fileType": 1, "versionCode": int(release.version_code or 0)}],
-        })
+        # 3) 更新文件信息（bindingFileList 绑定 APK 到版本）
+        if scb: scb("绑定 APK 文件…")
+        self._post(pkg, "/update-file-info", {
+            "bindingFileList": [{"objectId": object_id}],
+        }, query={"appId": app_id})
 
-        # 4) 更新应用信息（发布类型/定时）
-        meta = release.metadata or {}
-        publish_body: Dict[str, Any] = {
-            "appId": app_id,
-            "publishType": 1,
+        # 4) 更新应用信息（复用现网 basicInfo）
+        if scb: scb("更新应用信息…")
+        app_info: Dict[str, Any] = {
+            "appClassification": basic.get("appClassification", ""),
+            "gameType": basic.get("gameType"),
+            "supplyName": basic.get("supplyName", ""),
+            "supplyNameEn": basic.get("supplyNameEn", ""),
+            "devName": basic.get("devName", ""),
+            "devNameEn": basic.get("devNameEn", ""),
+            "webUrl": basic.get("webUrl", ""),
+            "customerServiceEmail": basic.get("customerServiceEmail", ""),
+            "customerServiceTel": basic.get("customerServiceTel", ""),
+            "defaultLanguage": basic.get("defaultLanguage", "zh-CN"),
+            "releaseCountry": basic.get("releaseCountry", "CN"),
+            "paymentInfo": basic.get("paymentInfo", 1),
+            "inAppPayment": basic.get("inAppPayment", ""),
+            "ratingId": basic.get("ratingId", 3),
+            "privacyPolicyUrl": basic.get("privacyPolicyUrl", ""),
+            "publicationNumber": basic.get("publicationNumber"),
+            "appRegistrationEntityStatus": basic.get("appRegistrationEntityStatus"),
+            "appRegistrationNumber": basic.get("appRegistrationNumber"),
+            "appRegistrationEntityName": basic.get("appRegistrationEntityName", ""),
+            "unifiedSocialCreditId": basic.get("unifiedSocialCreditId", ""),
         }
-        ot = meta.get("online_time") or release.metadata.get("online_time")
+        app_info = {k: (v if v is not None else "") for k, v in app_info.items()}
+        self._post(pkg, "/update-app-info", app_info, query={"appId": app_id})
+
+        # 5) 更新多语言信息（复用现网 languageInfo，替换 newFeature 为本次更新说明）
+        if scb: scb("更新多语言信息…")
+        lang_list = []
+        if langs:
+            lang_list = [{
+                "languageId": lang.get("languageId", "zh-CN"),
+                "appName": lang.get("appName", ""),
+                "intro": lang.get("intro", ""),
+                "briefIntro": lang.get("briefIntro", ""),
+                "newFeature": release.release_notes or lang.get("newFeature", ""),
+            } for lang in langs]
+        else:
+            lang_list = [{
+                "languageId": "zh-CN",
+                "appName": release.title or pkg,
+                "intro": "",
+                "briefIntro": "",
+                "newFeature": release.release_notes or "",
+            }]
+        self._post(pkg, "/update-language-info", {
+            "languageInfoList": lang_list,
+            "setAll": 0,
+        }, query={"appId": app_id})
+
+        # 6) 提交审核
+        if scb: scb("提交审核到荣耀…")
+        meta = release.metadata or {}
+        audit_body: Dict[str, Any] = {"releaseType": 1}
+        ot = meta.get("online_time") or meta.get("onlineTime")
         if ot:
             import datetime as _dt
             try:
@@ -151,15 +250,14 @@ class HonorAdapter(StoreAdapter):
                     ot_int = int(dt.timestamp() * 1000)
                 except (ValueError, TypeError):
                     raise StoreError(f"online_time 格式错误: {ot!r}")
-            publish_body["publishType"] = 2
-            publish_body["scheduledTime"] = _dt.datetime.fromtimestamp(ot_int / 1000).strftime("%Y-%m-%dT%H:%M:%S+0800")
-        self._post(release.package_name, "/update-app-info", publish_body)
+            audit_body["releaseType"] = 2
+            audit_body["releaseTime"] = _dt.datetime.fromtimestamp(ot_int / 1000).strftime("%Y-%m-%dT%H:%M:%S+0800")
+        if meta.get("force_update") or meta.get("forceUpdate"):
+            audit_body["forceUpdate"] = 1
+        audit = self._post(pkg, "/submit-audit", audit_body, query={"appId": app_id})
 
-        if scb: scb("提交审核到荣耀…")
-        # 5) 提交审核
-        audit = self._post(release.package_name, "/submit-audit", {"appId": app_id})
         release_id = audit.get("data", {}).get("releaseId", "") if isinstance(audit.get("data"), dict) else ""
-        return SubmitResult(self.platform, True, f"荣耀: 提交审核成功",
+        return SubmitResult(self.platform, True, "荣耀: 提交审核成功",
                             remote_reference=str(release_id), state=AuditState.SUBMITTED, raw=audit)
 
     def query_status(self, package_name: str) -> StoreStatus:
