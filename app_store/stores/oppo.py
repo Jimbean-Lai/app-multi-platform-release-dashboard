@@ -100,9 +100,9 @@ class OPPOAdapter(StoreAdapter):
             raise StoreError(f"OPPO {path}: {payload.get('errmsg', payload)}")
         return payload
 
-    def _upload_file(self, file_path: str, cb=None) -> str:
+    def _upload_file(self, file_path: str, cb=None, pkg: str = "") -> str:
         import requests as req
-        cfg = self._request("GET", "/resource/v1/upload/get-upload-url")
+        cfg = self._request("GET", "/resource/v1/upload/get-upload-url", pkg=pkg)
         upload_url = cfg["data"]["upload_url"]
         upload_sign = cfg["data"]["sign"]
         file_size = os.path.getsize(file_path)
@@ -137,7 +137,7 @@ class OPPOAdapter(StoreAdapter):
         md5 = self._file_md5(apk)
         if scb: scb("上传 APK 到 OPPO…")
         pc = (release.metadata or {}).get("_progress_cb")
-        apk_url = self._upload_file(apk, cb=pc)
+        apk_url = self._upload_file(apk, cb=pc, pkg=release.package_name)
 
         params = {
             "pkg_name": release.package_name,
