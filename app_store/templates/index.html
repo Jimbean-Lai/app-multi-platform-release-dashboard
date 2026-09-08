@@ -131,8 +131,8 @@ h+='<div class=grid><div class=card><h3>应用信息</h3>'+
 '<div class=row><span class=k>versionName</span><span class=v>'+esc(a.version_name||"-")+'</span></div>'+
 '<div class=row><span class=k>versionCode</span><span class=v>'+(a.version_code==null?"-":a.version_code)+'</span></div>'+(a.huawei_harmony_package?'<div class=row><span class=k>华为 Harmony 包</span><span class=v>'+esc(a.huawei_harmony_package)+'</span></div>':"")+'</div>';
 h+='<div class=card><h3>构建产物</h3>'+
-'<div class=input-row><input id=paab value="'+esc(a.aab_build||"")+'" placeholder="AAB (Google Play)"><button class=sm secondary onclick=fp("aab")>检测</button><button class=sm secondary onclick=clr("paab")>清</button></div>'+
-'<div class=input-row><input id=papk value="'+esc(a.apk_build||"")+'" placeholder="APK (国内平台)"><button class=sm secondary onclick=fp("apk")>检测</button><button class=sm secondary onclick=clr("papk")>清</button></div>'+
+'<div class=input-row><input id=paab value="" placeholder="AAB (Google Play)"><button class=sm secondary onclick=selBuild("aab")>选择…</button><button class=sm secondary onclick=clr("paab")>清</button></div>'+
+'<div class=input-row><input id=papk value="" placeholder="APK (国内平台)"><button class=sm secondary onclick=selBuild("apk")>选择…</button><button class=sm secondary onclick=clr("papk")>清</button></div>'+
 (a.aab_exists?'<span class=badge style=color:var(--ok)>AAB 存在</span> ':"")+(a.apk_exists?'<span class=badge style=color:var(--ok)>APK 存在</span>':"")+'<div id=papkAlert style=font-size:12px;margin:4px 0;min-height:16px></div><div style=margin-top:4px><button onclick=pth()>保存路径</button></div></div>';
 h+='<div class=card><h3>发布</h3>'+
 '<div><label>版本名</label><input id=ipvn readonly value="'+(a.version_name||"")+'"></div>'+
@@ -148,6 +148,12 @@ function clr(x){$(x).value="";pth()}
 function fp(t){var a=ST.cur;if(!a)return;api("/api/files").then(function(f){var l=(f&&f[t])||[];if(!l.length){toast("未检测到"+t.toUpperCase()+"文件","err");return}
 var h='<div class="overlay" onclick="if(event.target===this)cm()"><div class="modal"><h3 style=margin-bottom:8px>选择 '+t.toUpperCase()+" 文件</h3>";(l||[]).forEach(function(x){var z=x.size>1e6?(x.size/1e6).toFixed(1)+" MB":Math.max(1,Math.round(x.size/1e3))+" KB";h+='<div class="file-item" data-type="'+t+'" data-path="'+esc(x.path)+'" onclick="pick(this)"><span class=fname>'+esc(x.name)+'</span><span class=muted>'+z+"</span></div>"});h+='<div style=margin-top:10px;text-align:right><button class=secondary onclick=cm()>取消</button></div></div></div>';var d=document.createElement("div");d.innerHTML=h;document.body.appendChild(d.firstElementChild)})}
 function pick(el){var t=el.dataset.type,p=el.dataset.path;var inp=$(t==="aab"?"paab":"papk");inp.value=p;cm();toast("已选: "+p.split("/").pop());if(ST.cur)autoMeta(p,ST.cur.id,t)}
+function selBuild(t){var inp=document.createElement("input");inp.type="file";inp.accept=t==="aab"?".aab":".apk";inp.onchange=function(){if(!inp.files||!inp.files[0])return;onFileChosen(t,inp.files[0])};inp.click()}
+function onFileChosen(t,file){if(!ST.cur){return}busy(true);lg("上传 "+(t==="aab"?"AAB":"APK")+": "+file.name+" …");
+var fd=new FormData();fd.append("type",t);fd.append("file",file);
+fetch("/api/build/upload",{method:"POST",body:fd}).then(function(r){return r.json()}).then(function(res){busy(false);if(!res.ok){lg("上传失败: "+(res.error||"?"),"err");toast("上传失败","err");return}
+var inp=$(t==="aab"?"paab":"papk");inp.value=res.path;lg("已保存到: "+res.path,"ok");toast("已选择 "+(t==="aab"?"AAB":"APK")+": "+file.name);
+autoMeta(res.path,ST.cur.id,t)}).catch(function(e){busy(false);lg("上传异常: "+e,"err")})}
 function cm(){document.querySelectorAll(".overlay").forEach(function(e){if(e.id!=="toast")e.remove()})}
 function pth(){var a=ST.cur;if(!a)return;var ab=$("paab").value.trim(),ap=$("papk").value.trim();busy(true);api("/api/apps/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({app_id:a.id,aab_build:ab,apk_build:ap})}).then(function(r){if(r.ok){lg("路径已保存","ok");toast("路径已保存");if(ap&&!r.error)autoMeta(ap,a.id,"apk");if(ab&&!r.error)autoMeta(ab,a.id,"aab")}else{lg("保存失败: "+JSON.stringify(r),"err")}}).finally(function(){busy(false)})}
 function publishPlatsHTML(){var pubs=(ST.platforms||[]).filter(function(p){return p.platform!=="apple"});var labelMap={huawei:"华为",oppo:"OPPO",vivo:"VIVO",xiaomi:"小米",honor:"荣耀",google:"Google Play"};return pubs.map(function(p){var nm=labelMap[p.platform]||p.display_name;var badge=p.availability==="ready"?"":"(骨架)";return '<label class=plat-item><input type=checkbox class=plat-cb value="'+p.platform+'" '+""+'><span>'+nm+'</span>'+badge+'</label>'}).join("")}
@@ -174,7 +180,8 @@ var rows=document.querySelectorAll('#appc .card .row');rows.forEach(function(ro)
 }})
 })}
 function dpub(){var a=ST.cur;if(!a||!a.package_name){toast("请选择应用（需配包名）","err");return}
-var body={app_id:a.id,platform:selPlats(),dry_run:$("ipdry").checked,auto_review:$("ipauto").checked,version_name:$("ipvn").value.trim(),version_code:parseInt($("ipvc").value)||null,release_notes:$("ipn").value.trim(),track:$("ipv").value,aab_path:$("paab").value.trim(),apk_path:$("papk").value.trim(),online_time:document.getElementById("pot")?document.getElementById("pot").value.trim():""};
+var ab_in=$("paab").value.trim(),ap_in=$("papk").value.trim();
+var body={app_id:a.id,platform:selPlats(),dry_run:$("ipdry").checked,auto_review:$("ipauto").checked,version_name:$("ipvn").value.trim(),version_code:parseInt($("ipvc").value)||null,release_notes:$("ipn").value.trim(),track:$("ipv").value,aab_path:(ab_in||a.aab_build||""),apk_path:(ap_in||a.apk_build||""),online_time:document.getElementById("pot")?document.getElementById("pot").value.trim():""};
 lg("== "+(body.dry_run?"Dry-run":"正式")+"发布 "+(a.name||a.id)+" ==");busy(true);api("/api/publish",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(function(r){if(r.task_id){lg("任务: "+r.task_id);startPoll(r.task_id)}else{lg("启动失败: "+JSON.stringify(r),"err");busy(false)}})}
 function startPoll(tid){ST.POLL=tid;$("progress").classList.remove("hide");$("tsteps").innerHTML="";poll()}
 function poll(){if(!ST.POLL)return;api("/api/tasks/"+ST.POLL).then(function(t){if(t.error){lg("查询失败","err");stopPoll();return}

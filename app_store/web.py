@@ -299,6 +299,8 @@ class Handler(BaseHTTPRequestHandler):
     # ---- POST ----
     def do_POST(self):  # noqa: N802
         path = urlparse(self.path).path
+        if path == "/api/build/upload":
+            return self._api_build_upload()
         body = _read_body(self)
         try:
             if path == "/api/publish":
@@ -337,6 +339,59 @@ class Handler(BaseHTTPRequestHandler):
         """返回本机可选的 AAB/APK 列表，供前端选择。"""
         catalog = self._catalog()
         return _json_response(self, catalog.detect_local_builds())
+
+    def _api_build_upload(self):
+        """接收前端选择的 AAB/APK 文件并保存到工作区 builds/ 目录。
+
+        浏览器 file input 拿不到本地绝对路径，所以通过上传方式把文件
+        落到后端（127.0.0.1 本地，大文件也快），返回后端真实路径。
+        multipart 表单字段：type = aab|apk, file = 文件
+        """
+        import cgi
+        import shutil
+
+        try:
+            form = cgi.FieldStorage(
+                fp=self.rfile,
+                headers=self.headers,
+                environ={
+                    "REQUEST_METHOD": "POST",
+                    "CONTENT_TYPE": self.headers.get("Content-Type", ""),
+                },
+            )
+        except Exception as e:
+            raise StoreError(f"上传解析失败: {e}")
+
+        ftype = (form.getvalue("type") or "").lower()
+        if ftype not in ("aab", "apk"):
+            raise StoreError("缺少或错误的 type 参数（aab|apk）")
+        if "file" not in form:
+            raise StoreError("未收到文件")
+        fileitem = form["file"]
+        if isinstance(fileitem, list):
+            fileitem = fileitem[0]
+        if not getattr(fileitem, "filename", None):
+            raise StoreError("未收到文件")
+
+        # 安全文件名：取 basename，加时间戳防重名
+        safe_name = os.path.basename(fileitem.filename or f"upload.{ftype}")
+        ts = _tm.strftime("%Y%m%d%H%M%S")
+        stem, ext = os.path.splitext(safe_name)
+        save_name = f"{stem}-{ts}{ext}" if ts else safe_name
+
+        builds_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "builds")
+        save_dir = os.path.join(builds_root, ftype)
+        os.makedirs(save_dir, exist_ok=True)
+        save_path = os.path.abspath(os.path.join(save_dir, save_name))
+
+        # 流式写入（大文件避免整包读内存）
+        with open(save_path, "wb") as out:
+            if hasattr(fileitem.file, "read"):
+                shutil.copyfileobj(fileitem.file, out, 1024 * 1024)
+            else:
+                out.write(fileitem.value if isinstance(fileitem.value, bytes) else b"")
+
+        return _json_response(self, {"ok": True, "type": ftype, "path": save_path, "name": save_name})
 
     def _api_update_app(self, body: Dict[str, Any]):
         app_id = body.get("app_id") or ""
