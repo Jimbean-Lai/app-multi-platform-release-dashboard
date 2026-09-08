@@ -196,7 +196,8 @@ class XiaomiAdapter(StoreAdapter):
                 payload = self._post(PUSH_URL, data=req_data, files=files)
 
         if scb: scb("小米发布完成")
-        ok = payload.get("code") in (0, "0", 200, "200", 900, "900")
+        # 小米 push 返回 result=0 表示成功（非 code）
+        ok = payload.get("result") in (0, "0", 200, "200", 900, "900") or payload.get("code") in (0, "0", 200, "200", 900, "900")
         return SubmitResult(
             platform=self.platform,
             ok=ok,

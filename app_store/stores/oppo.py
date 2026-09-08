@@ -110,13 +110,14 @@ class OPPOAdapter(StoreAdapter):
             with open(file_path, "rb") as f:
                 fields = [
                     ("sign", upload_sign),
+                    ("type", "apk"),
                     ("file", (os.path.basename(file_path), f, "application/octet-stream")),
                 ]
                 body = make_multipart_monitor(fields, file_size, cb)
                 resp = req.post(upload_url, data=body, headers={"Content-Type": body.content_type}, timeout=600)
         else:
             with open(file_path, "rb") as f:
-                resp = req.post(upload_url, data={"sign": upload_sign}, files={"file": (os.path.basename(file_path), f)}, timeout=600)
+                resp = req.post(upload_url, data={"sign": upload_sign, "type": "apk"}, files={"file": (os.path.basename(file_path), f)}, timeout=600)
         r = resp.json()
         if r.get("errno") != 0:
             raise StoreError(f"OPPO 上传错误: {r}")
