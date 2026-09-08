@@ -39,6 +39,7 @@ class AuditState(str, Enum):
     DRAFT = "draft"  # 草稿/未提交
     SUBMITTED = "submitted"  # 已提交
     REVIEWING = "reviewing"  # 审核中
+    PENDING = "pending"  # 审核通过，待发布/定时发布
     REJECTED = "rejected"  # 被驳回
     PUBLISHED = "published"  # 已上架
     UNKNOWN = "unknown"  # 未知/未接入
@@ -49,6 +50,7 @@ class AuditState(str, Enum):
             AuditState.DRAFT: "草稿",
             AuditState.SUBMITTED: "已提交",
             AuditState.REVIEWING: "审核中",
+            AuditState.PENDING: "待发布",
             AuditState.REJECTED: "被驳回",
             AuditState.PUBLISHED: "已上架",
             AuditState.UNKNOWN: "未知",

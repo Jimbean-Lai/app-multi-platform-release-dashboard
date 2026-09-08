@@ -273,9 +273,21 @@ class HonorAdapter(StoreAdapter):
         release_id = data.get("releaseId") or ""
 
         # 0审核中 1通过 2不通过 3其他 4编辑未提交
+        # 已上架 vs 待发布：auditResult=1(通过)时查 publishInfo.releaseType
+        # releaseType=2(定时) → 待发布(定时)；=1(立即) → 已上架
+        release_type = None
+        release_time = ""
+        try:
+            det = self._get_app_detail(package_name, app_id)
+            pi = det.get("publishInfo") or {}
+            release_type = pi.get("releaseType")
+            release_time = pi.get("releaseTime") or ""
+        except Exception:
+            pass
+
         state = AuditState.UNKNOWN
         if audit == 1:
-            state = AuditState.PUBLISHED
+            state = AuditState.PENDING if release_type == 2 else AuditState.PUBLISHED
         elif audit == 0:
             state = AuditState.REVIEWING
         elif audit == 4:
@@ -283,13 +295,20 @@ class HonorAdapter(StoreAdapter):
         elif audit == 2:
             state = AuditState.REJECTED
 
-        # 已上架 vs 审核中分离
+        # 已上架 vs 审核中/待发布分离
         live_names = [str(version)] if version and state == AuditState.PUBLISHED else []
         reviewing_names = [str(version)] if version and state != AuditState.PUBLISHED else []
 
         # 审核状态文字（标准化，剥离 HTML）
         note = ""
-        if state == AuditState.REVIEWING:
+        if state == AuditState.PENDING:
+            if release_time:
+                # "2026-09-14T13:00:00+0800" → 转可读
+                rt = release_time.replace("T", " ").replace("+0800", "")
+                note = f"{version} 审核通过，定时发布（{rt}）"
+            else:
+                note = f"{version} 审核通过"
+        elif state == AuditState.REVIEWING:
             note = "审核中"
         elif state == AuditState.REJECTED:
             note = "审核未通过"
@@ -297,11 +316,6 @@ class HonorAdapter(StoreAdapter):
             note = "草稿"
         elif state == AuditState.PUBLISHED:
             note = "已上架"
-        if note and audit_msg:
-            import re as _re
-            plain = _re.sub(r"<[^>]+>", "", audit_msg).strip()
-            if "通过" in plain and state != AuditState.PUBLISHED:
-                note = f"{version} 审核通过，待发布"
 
         msgs = []
         if release_id: msgs.append(f"releaseId: {release_id}")

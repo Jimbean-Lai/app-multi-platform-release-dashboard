@@ -215,28 +215,32 @@ class VivoAdapter(StoreAdapter):
         online_type = data.get("onlineType")
 
         state = AuditState.UNKNOWN
-        # status: 0=草稿/空 1=审核中 2=审核中 3=已上架; saleStatus=0 不可售 1=可售
-        if status == 3 or sale == 1:
-            state = AuditState.PUBLISHED
+        # status: 0=草稿/空 1=审核中 2=审核中 3=审核通过; saleStatus=0 不可售 1=可售(已上架)
+        sche_val = data.get("scheOnlineTime") or data.get("sche_online_time") or ""
+        if sale == 1:
+            state = AuditState.PUBLISHED  # 已上架（可售）
         elif status in (1, 2):
             state = AuditState.REVIEWING
+        elif status == 3:
+            state = AuditState.PENDING  # 审核通过未上架（待发布/定时）
         elif status == 0:
             state = AuditState.DRAFT
-        if state in (AuditState.PUBLISHED, AuditState.REVIEWING) and not version:
+        if state in (AuditState.PUBLISHED, AuditState.REVIEWING, AuditState.PENDING) and not version:
             state = AuditState.UNKNOWN
 
-        # 已上架 vs 审核中分离
+        # 已上架 vs 审核中/待发布分离
         live_names = [str(version)] if version and state == AuditState.PUBLISHED else []
         reviewing_names = [str(version)] if version and state != AuditState.PUBLISHED else []
 
         # 审核状态文字（标准化）
         note = ""
-        if state == AuditState.REVIEWING:
-            if online_type == 2:
-                sche_val = data.get("scheOnlineTime") or data.get("sche_online_time") or ""
-                note = f"{version} 审核通过，定时发布（{sche_val}）" if sche_val else f"{version} 审核通过，定时发布"
+        if state == AuditState.PENDING:
+            if online_type == 2 and sche_val:
+                note = f"{version} 审核通过，定时发布（{sche_val}）"
             else:
-                note = f"{version} 审核通过，待发布"
+                note = f"{version} 审核通过"
+        elif state == AuditState.REVIEWING:
+            note = "审核中"
         elif state == AuditState.PUBLISHED:
             note = "已上架"
         elif state == AuditState.DRAFT:

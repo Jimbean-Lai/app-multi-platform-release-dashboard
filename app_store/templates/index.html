@@ -53,6 +53,7 @@ label{display:block;color:var(--mut);font-size:11px;margin:8px 0 3px}
 .state{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11.5px;font-weight:600}
 .state.published{background:#14532d;color:var(--ok)}
 .state.reviewing{background:#78350f;color:var(--warn)}
+.state.pending{background:#1e4d6b;color:#7dd3fc}
 .state.draft,.state.submitted{background:#1e3a5f;color:var(--acc)}
 .state.rejected{background:#7f1d1d;color:var(--err)}
 .state.unknown{background:#23395e;color:var(--mut)}
@@ -120,7 +121,7 @@ function toast(m,t){var e=$("toast");e.style.display="flex";e.innerHTML='<div cl
 function close(){ $("toast").style.display="none" }
 function lg(t,c){var e=$("lg");if(e){var d=document.createElement("div");d.className=c||"";d.textContent=t;e.appendChild(d);e.scrollTop=e.scrollHeight}}
 function busy(o){document.querySelectorAll("button,input,select,textarea").forEach(function(b){b.disabled=o})}
-function stat(ch){var m={published:"已上架",reviewing:"审核中",draft:"草稿",submitted:"已提交",rejected:"被驳回",unknown:"未知"};return m[ch]||ch}
+function stat(ch){var m={published:"已上架",reviewing:"审核中",pending:"待发布",draft:"草稿",submitted:"已提交",rejected:"已拒绝",unknown:"未知"};return m[ch]||ch}
 function ld(){Promise.all([api("/api/apps"),api("/api/platforms"),api("/api/config"),api("/api/tasks")]).then(function(rs){ST.apps=rs[0].apps||[];ST.cats=rs[0].categories||[];ST.platforms=rs[1]||[];$("cfg").textContent="凭证: "+(rs[2].credentials||"");renderSb();if(ST.apps.length){if(!ST.cur||!ST.apps.find(function(a){return a.id===ST.cur.id}))sa(ST.apps[0].id);else renderMain()}var hist=(rs[3]&&rs[3].history)||[];renderHistory(hist.slice(0,8))}).catch(function(e){console.error(e)})}
 function renderSb(){var h="";(ST.cats||[]).forEach(function(c){h+='<div class=cat-title>'+esc(c.name)+"</div>";(ST.apps||[]).filter(function(a){return a.category===c.name}).forEach(function(a){var act=ST.cur&&ST.cur.id===a.id?"active":"";var dot=a.package_name?'<span class=dot style=background:var(--ok)></span>':'<span class=dot style=background:var(--warn)></span>';h+='<div class="app-item '+act+'" data-id="'+esc(a.id)+'" onclick="sa(this.dataset.id)">'+dot+'<span>'+esc(a.name)+"</span></div>"})});$("sb").innerHTML=h}
 function sa(id){ST.cur=(ST.apps||[]).find(function(a){return a.id===id})||null;renderSb();renderMain()}

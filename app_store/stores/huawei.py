@@ -202,7 +202,9 @@ class HuaweiAdapter(StoreAdapter):
  # 5=升级审核中 6=申请下架 7=草稿 8=升级审核不通过 12=预审中
  if release_state in (4, 5, 12):
  state = AuditState.REVIEWING
- elif release_state in (0, 3):
+ elif release_state == 3:
+ state = AuditState.PENDING # 审核通过待上架
+ elif release_state == 0:
  state = AuditState.PUBLISHED
  elif release_state in (1, 8):
  state = AuditState.REJECTED
@@ -224,7 +226,7 @@ class HuaweiAdapter(StoreAdapter):
  elif release_state in (1, 8):
  note = "审核未通过"
  elif release_state == 3:
- note = f"{curr_version} 审核通过，待发布" if curr_version else "审核通过，待发布"
+ note = f"{curr_version} 审核通过" if curr_version else "审核通过"
  elif release_state == 0:
  note = "已上架"
  return StoreStatus(
@@ -248,7 +250,9 @@ class HuaweiAdapter(StoreAdapter):
  codes = [int(vcode)] if vcode else []
  if release_state in (4, 5, 12):
  state = AuditState.REVIEWING
- elif release_state in (0, 3):
+ elif release_state == 3:
+ state = AuditState.PENDING
+ elif release_state == 0:
  state = AuditState.PUBLISHED
  elif release_state in (1, 8):
  state = AuditState.REJECTED
@@ -263,7 +267,7 @@ class HuaweiAdapter(StoreAdapter):
  elif release_state in (1, 8):
  note = "审核未通过"
  elif release_state == 3:
- note = f"{curr_version} 审核通过，待发布" if curr_version else "审核通过，待发布"
+ note = f"{curr_version} 审核通过" if curr_version else "审核通过"
  elif release_state == 0:
  note = "已上架"
  return StoreStatus(

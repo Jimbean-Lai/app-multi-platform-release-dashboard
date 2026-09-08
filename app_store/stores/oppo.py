@@ -239,25 +239,30 @@ class OPPOAdapter(StoreAdapter):
         if audit_i == 111 or change_i == 111:
             state = AuditState.PUBLISHED
         elif audit_i is not None and 0 < audit_i < 111:
-            state = AuditState.REVIEWING
+            # 审核中；若已审核通过则进入"待发布"
+            if audit_name and ("通过" in audit_name):
+                state = AuditState.PENDING
+            else:
+                state = AuditState.REVIEWING
         elif audit_i == 0 or (change_i is not None and change_i != 111):
             state = AuditState.DRAFT
 
         # 已上架版本：仅 state=PUBLISHED 时当前版本才是线上
-        # 审核中版本：非已上架时当前版本为审核中版本
+        # 审核中/待发布版本：非已上架时当前版本
         live_names = [str(version)] if version and state == AuditState.PUBLISHED else []
         live_codes = [int(vcode)] if vcode and state == AuditState.PUBLISHED else []
         reviewing_names = [str(version)] if version and state != AuditState.PUBLISHED else []
 
-        # 审核状态文字（标准化）
+        # 审核状态文字（标准化；待发布已由右上角徽章表达，此处不带"待发布"字样）
         note = ""
-        if state == AuditState.REVIEWING:
-            if audit_name and ("通过" in audit_name):
-                if online_type == 2 and sche_time:
-                    note = f"{version} 审核通过，定时发布（{sche_time}）"
-                else:
-                    note = f"{version} 审核通过，待发布"
-            elif audit_name and ("不通过" in audit_name or "驳回" in audit_name):
+        online_i = _to_int(online_type)
+        if state == AuditState.PENDING:
+            if online_i == 2 and sche_time:
+                note = f"{version} 审核通过，定时发布（{sche_time}）"
+            else:
+                note = f"{version} 审核通过"
+        elif state == AuditState.REVIEWING:
+            if audit_name and ("不通过" in audit_name or "驳回" in audit_name):
                 note = "审核未通过"
             else:
                 note = "审核中"
@@ -265,6 +270,8 @@ class OPPOAdapter(StoreAdapter):
             note = "审核未通过"
         elif state == AuditState.DRAFT:
             note = "草稿"
+        elif state == AuditState.PUBLISHED:
+            note = "已上架"
 
         return StoreStatus(self.platform, package_name, state,
                            live_version_names=live_names,
