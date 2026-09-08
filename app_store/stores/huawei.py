@@ -222,7 +222,7 @@ class HuaweiAdapter(StoreAdapter):
  # 审核状态文字（标准化）
  note = ""
  if release_state in (4, 5, 12):
- note = "审核中"
+ note = f"{curr_version} 审核中" if curr_version else "审核中"
  elif release_state in (1, 8):
  note = "审核未通过"
  elif release_state == 3:
@@ -263,7 +263,7 @@ class HuaweiAdapter(StoreAdapter):
  reviewing_names = [str(curr_version)] if curr_version and curr_version != live_version else []
  note = ""
  if release_state in (4, 5, 12):
- note = "审核中"
+ note = f"{curr_version} 审核中" if curr_version else "审核中"
  elif release_state in (1, 8):
  note = "审核未通过"
  elif release_state == 3:
