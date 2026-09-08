@@ -215,9 +215,10 @@ class HuaweiAdapter(StoreAdapter):
  pkg,
  )
  url_info = up.get("urlInfo") or {}
- obs_url = url_info.get("uploadUrl") or ""
+ # 华为返回字段：url / objectId / method / headers（注意不是 uploadUrl/headerInfo）
+ obs_url = url_info.get("url") or url_info.get("uploadUrl") or ""
  object_id = url_info.get("objectId") or ""
- obs_headers = url_info.get("headerInfo") or {}
+ obs_headers = url_info.get("headers") or url_info.get("headerInfo") or {}
  if isinstance(obs_headers, str):
  obs_headers = json.loads(obs_headers) if obs_headers else {}
 
