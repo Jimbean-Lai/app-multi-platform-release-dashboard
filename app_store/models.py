@@ -101,11 +101,12 @@ class StoreStatus:
     live_version_codes: List[int] = field(default_factory=list)
     live_version_names: List[str] = field(default_factory=list)
     draft_version_names: List[str] = field(default_factory=list)  # 草稿/未送审
-    reviewing_version_names: List[str] = field(default_factory=list)  # 审核中
+    reviewing_version_names: List[str] = field(default_factory=list)  # 审核中/审核通过未发布版本
     beta_version_names: List[str] = field(default_factory=list)  # Google beta 轨道
     alpha_version_names: List[str] = field(default_factory=list)  # Google alpha 轨道
     internal_version_names: List[str] = field(default_factory=list)  # Google internal 轨道
-    review_message: str = ""
+    audit_note: str = ""  # 审核状态文字（标准化）：审核中 / 审核通过，待发布 / 审核通过，定时发布（时间）/ 审核未通过
+    review_message: str = ""  # 平台附加信息（更新说明/releaseId 等，不在状态卡直接展示）
     checked_at: str = ""
     raw: Any = None
 

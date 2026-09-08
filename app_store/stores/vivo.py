@@ -229,21 +229,25 @@ class VivoAdapter(StoreAdapter):
         live_names = [str(version)] if version and state == AuditState.PUBLISHED else []
         reviewing_names = [str(version)] if version and state != AuditState.PUBLISHED else []
 
-        msgs = []
+        # 审核状态文字（标准化）
+        note = ""
         if state == AuditState.REVIEWING:
             if online_type == 2:
                 sche_val = data.get("scheOnlineTime") or data.get("sche_online_time") or ""
-                msgs.append(f"审核通过，定时发布（{sche_val}）" if sche_val else "审核通过，定时发布")
+                note = f"{version} 审核通过，定时发布（{sche_val}）" if sche_val else f"{version} 审核通过，定时发布"
             else:
-                msgs.append("审核通过，待发布")
+                note = f"{version} 审核通过，待发布"
         elif state == AuditState.PUBLISHED:
-            msgs.append("已上架")
+            note = "已上架"
         elif state == AuditState.DRAFT:
-            msgs.append("草稿")
+            note = "草稿"
+        msgs = []
         if update_desc:
             msgs.append(f"更新说明: {update_desc}")
         return StoreStatus(self.platform, package_name, state,
-                           live_version_names=[version] if version else [],
-                           live_version_codes=[int(vcode)] if str(vcode).isdigit() else [],
+                           live_version_names=live_names,
+                           live_version_codes=[int(vcode)] if str(vcode).isdigit() and state == AuditState.PUBLISHED else [],
+                           reviewing_version_names=reviewing_names,
+                           audit_note=note,
                            review_message="；".join(msgs),
                            raw=payload, checked_at=utcnow_iso())

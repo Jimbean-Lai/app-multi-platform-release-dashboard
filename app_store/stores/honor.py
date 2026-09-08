@@ -282,13 +282,35 @@ class HonorAdapter(StoreAdapter):
             state = AuditState.DRAFT
         elif audit == 2:
             state = AuditState.REJECTED
+
+        # 已上架 vs 审核中分离
+        live_names = [str(version)] if version and state == AuditState.PUBLISHED else []
+        reviewing_names = [str(version)] if version and state != AuditState.PUBLISHED else []
+
+        # 审核状态文字（标准化，剥离 HTML）
+        note = ""
+        if state == AuditState.REVIEWING:
+            note = "审核中"
+        elif state == AuditState.REJECTED:
+            note = "审核未通过"
+        elif state == AuditState.DRAFT:
+            note = "草稿"
+        elif state == AuditState.PUBLISHED:
+            note = "已上架"
+        if note and audit_msg:
+            import re as _re
+            plain = _re.sub(r"<[^>]+>", "", audit_msg).strip()
+            if "通过" in plain and state != AuditState.PUBLISHED:
+                note = f"{version} 审核通过，待发布"
+
         msgs = []
-        if audit_msg: msgs.append(audit_msg)
         if release_id: msgs.append(f"releaseId: {release_id}")
         return StoreStatus(
             self.platform, package_name, state,
-            live_version_names=[version] if version else [],
-            live_version_codes=[int(vcode)] if str(vcode).isdigit() else [],
+            live_version_names=live_names,
+            live_version_codes=[int(vcode)] if str(vcode).isdigit() and state == AuditState.PUBLISHED else [],
+            reviewing_version_names=reviewing_names,
+            audit_note=note,
             review_message="；".join(msgs),
             raw=d, checked_at=utcnow_iso(),
         )

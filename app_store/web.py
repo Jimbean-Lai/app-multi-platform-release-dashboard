@@ -517,6 +517,7 @@ class Handler(BaseHTTPRequestHandler):
                     "beta_version_names": list(getattr(s, "beta_version_names", [])),
                     "alpha_version_names": list(getattr(s, "alpha_version_names", [])),
                     "internal_version_names": list(getattr(s, "internal_version_names", [])),
+                    "audit_note": s.audit_note,
                     "review_message": s.review_message,
                     "checked_at": s.checked_at,
                 })

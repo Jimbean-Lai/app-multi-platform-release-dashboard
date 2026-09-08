@@ -231,7 +231,10 @@ class XiaomiAdapter(StoreAdapter):
         names = [str(version)] if version else []
         codes = [int(vcode)] if vcode not in (None, "", 0) else []
         state = AuditState.PUBLISHED if version else (AuditState.UNKNOWN if ok else AuditState.UNKNOWN)
+        # 小米 dev/query 无审核状态字段；"查询成功"等操作信息不写入状态
         msg = payload.get("message") or ""
+        if msg in ("查询成功", "成功", ""):
+            msg = ""
         return StoreStatus(
             platform=self.platform,
             package_name=package_name,

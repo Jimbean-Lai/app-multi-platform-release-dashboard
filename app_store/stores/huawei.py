@@ -217,19 +217,22 @@ class HuaweiAdapter(StoreAdapter):
  reviewing_names = []
  if curr_version and curr_version != live_version:
  reviewing_names = [str(curr_version)]
- # 审核状态文字
- msg = ""
- if release_state in (1, 8):
- msg = "审核未通过"
+ # 审核状态文字（标准化）
+ note = ""
+ if release_state in (4, 5, 12):
+ note = "审核中"
+ elif release_state in (1, 8):
+ note = "审核未通过"
  elif release_state == 3:
- msg = f"审核通过，待发布"
+ note = f"{curr_version} 审核通过，待发布" if curr_version else "审核通过，待发布"
  elif release_state == 0:
- msg = "已上架"
+ note = "已上架"
  return StoreStatus(
  self.platform, pkg, state,
  live_version_names=live_names, live_version_codes=live_codes,
  reviewing_version_names=reviewing_names,
- review_message=msg,
+ audit_note=note,
+ review_message=f"releaseState={release_state}",
  raw=dd, checked_at=utcnow_iso(),
  )
 
@@ -254,18 +257,21 @@ class HuaweiAdapter(StoreAdapter):
  else:
  state = AuditState.UNKNOWN
  reviewing_names = [str(curr_version)] if curr_version and curr_version != live_version else []
- msg = ""
- if release_state in (1, 8):
- msg = "审核未通过"
+ note = ""
+ if release_state in (4, 5, 12):
+ note = "审核中"
+ elif release_state in (1, 8):
+ note = "审核未通过"
  elif release_state == 3:
- msg = "审核通过，待发布"
+ note = f"{curr_version} 审核通过，待发布" if curr_version else "审核通过，待发布"
  elif release_state == 0:
- msg = "已上架"
+ note = "已上架"
  return StoreStatus(
  self.platform, pkg, state,
  live_version_names=live_names, live_version_codes=codes,
  reviewing_version_names=reviewing_names,
- review_message=(msg + " (Harmony)") if msg else "",
+ audit_note=(note + "（Harmony）") if note else "",
+ review_message=f"releaseState={release_state}",
  raw=dd, checked_at=utcnow_iso(),
  )
 

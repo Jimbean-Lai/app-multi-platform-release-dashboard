@@ -249,28 +249,29 @@ class OPPOAdapter(StoreAdapter):
         live_codes = [int(vcode)] if vcode and state == AuditState.PUBLISHED else []
         reviewing_names = [str(version)] if version and state != AuditState.PUBLISHED else []
 
-        # 审核状态文字
-        msgs = []
+        # 审核状态文字（标准化）
+        note = ""
         if state == AuditState.REVIEWING:
             if audit_name and ("通过" in audit_name):
                 if online_type == 2 and sche_time:
-                    msgs.append(f"审核通过，定时发布（{sche_time}）")
+                    note = f"{version} 审核通过，定时发布（{sche_time}）"
                 else:
-                    msgs.append("审核通过，待发布")
+                    note = f"{version} 审核通过，待发布"
             elif audit_name and ("不通过" in audit_name or "驳回" in audit_name):
-                msgs.append("审核未通过")
+                note = "审核未通过"
             else:
-                msgs.append("审核中")
+                note = "审核中"
         elif state == AuditState.REJECTED:
-            msgs.append("审核未通过")
+            note = "审核未通过"
         elif state == AuditState.DRAFT:
-            msgs.append("草稿")
+            note = "草稿"
 
         return StoreStatus(self.platform, package_name, state,
                            live_version_names=live_names,
                            live_version_codes=live_codes,
                            reviewing_version_names=reviewing_names,
-                           review_message="；".join(msgs),
+                           audit_note=note,
+                           review_message=audit_name or "",
                            raw=payload, checked_at=utcnow_iso())
 
     @staticmethod

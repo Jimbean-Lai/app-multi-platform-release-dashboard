@@ -124,11 +124,12 @@ class AppleAdapter(StoreAdapter):
         if not version:
             version = r0.get("version") or ""
         state = AuditState.PUBLISHED if version else AuditState.UNKNOWN
-        msg = "来自 App Store 网页" if page_used else ("来自 iTunes Lookup" if version else "")
+        note = "已上架" if version else ""
         return StoreStatus(
             platform=self.platform, package_name=package_name, state=state,
             live_version_names=[version] if version else [],
-            review_message=msg,
+            audit_note=note,
+            review_message="",
             raw={"lookup": r0, "page_used": page_used},
             checked_at=utcnow_iso(),
         )
