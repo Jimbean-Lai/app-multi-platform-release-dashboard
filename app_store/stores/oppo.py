@@ -155,13 +155,17 @@ class OPPOAdapter(StoreAdapter):
                     "freeze_reason", "freeze_reason_with_sugg", "offline_info", "offline_time",
                     "online_time", "sche_online_time", "pic_url_material",
                     "landscape_pic_url_material", "video_url_material", "special_file_url",
-                    "electronic_cert_url", "icp_url", "cover_url", "header_md5", "icon_md5"):
+                    "electronic_cert_url", "icp_url", "cover_url", "header_md5", "icon_md5",
+            # 适配/设备/版本类字段由新 APK 决定，不应从旧版本继承
+            "adaptive_equipment", "adaptive_type", "version_device", "version_type",
+            "version_name", "resolution", "app_real_type"):
             params.pop(_ro, None)
 
         # 覆盖版本相关字段
         params.update({
             "pkg_name": release.package_name,
             "version_code": str(release.version_code or meta.get("version_code") or existing.get("version_code", "")),
+            "version_name": release.version_name or meta.get("version_name") or existing.get("version_name", ""),
             "apk_url": json.dumps([{"url": apk_url, "md5": md5, "cpu_code": meta.get("cpu_code", 0)}], ensure_ascii=False),
             "app_name": release.title or meta.get("appName") or existing.get("app_name", release.package_name),
             "second_category_id": meta.get("second_category_id") or existing.get("second_category_id", 0),
