@@ -142,10 +142,27 @@ class OPPOAdapter(StoreAdapter):
         pc = (release.metadata or {}).get("_progress_cb")
         apk_url = self._upload_file(apk, cb=pc, pkg=release.package_name)
 
-        params = {
+        # 以 OPPO 现网资料为基底（更新已有应用：分类/版权/商务联系人/简介等
+        # 全部沿用现网值，避免每次提交缺字段），再覆盖版本相关字段
+        params = dict(existing)
+        # 移除只读/管理字段（不允许回传）
+        for _ro in ("app_id", "dev_id", "version_id", "app_key", "sign", "apk_full_url",
+                    "apk_md5", "apk_size", "app_create_time", "create_time", "update_time",
+                    "audit_status", "audit_status_name", "change_state", "old_audit_status",
+                    "state", "type", "level", "reserve_state", "transfer_state",
+                    "refuse_reason", "refuse_reason_with_sugg", "business_refuse_reason",
+                    "online_info_offline_apply", "freeze_advice", "freeze_file",
+                    "freeze_reason", "freeze_reason_with_sugg", "offline_info", "offline_time",
+                    "online_time", "sche_online_time", "pic_url_material",
+                    "landscape_pic_url_material", "video_url_material", "special_file_url",
+                    "electronic_cert_url", "icp_url", "cover_url", "header_md5", "icon_md5"):
+            params.pop(_ro, None)
+
+        # 覆盖版本相关字段
+        params.update({
             "pkg_name": release.package_name,
             "version_code": str(release.version_code or meta.get("version_code") or existing.get("version_code", "")),
-            "apk_url": json.dumps([{"url": apk_url, "md5": md5, "cpu_code": meta.get("cpu_code", 0)}]),
+            "apk_url": json.dumps([{"url": apk_url, "md5": md5, "cpu_code": meta.get("cpu_code", 0)}], ensure_ascii=False),
             "app_name": release.title or meta.get("appName") or existing.get("app_name", release.package_name),
             "second_category_id": meta.get("second_category_id") or existing.get("second_category_id", 0),
             "third_category_id": meta.get("third_category_id") or existing.get("third_category_id", 0),
@@ -156,14 +173,15 @@ class OPPOAdapter(StoreAdapter):
             "icon_url": (self._upload_file(meta["icon"]) if meta.get("icon") else existing.get("icon_url", "")),
             "pic_url": (self._upload_images(meta["screenshots"]) if meta.get("screenshots") else existing.get("pic_url", "")),
             "test_desc": meta.get("test_desc") or existing.get("test_desc", ""),
-        # 商务联系人（OPPO 必填；优先 meta 配置，其次复用现网资料）
-        "business_username": meta.get("business_username") or existing.get("business_username", ""),
-        "business_email": meta.get("business_email") or existing.get("business_email", ""),
-        "business_mobile": meta.get("business_mobile") or existing.get("business_mobile", ""),
-        "business_qq": meta.get("business_qq") or existing.get("business_qq", ""),
-        "business_wx": meta.get("business_wx") or existing.get("business_wx", ""),
-        "business_address": meta.get("business_address") or existing.get("business_address", ""),
-        }
+            # 商务联系人（优先 meta 配置，其次复用现网资料）
+            "business_username": meta.get("business_username") or existing.get("business_username", ""),
+            "business_email": meta.get("business_email") or existing.get("business_email", ""),
+            "business_mobile": meta.get("business_mobile") or existing.get("business_mobile", ""),
+            "business_qq": meta.get("business_qq") or existing.get("business_qq", ""),
+            "business_wx": meta.get("business_wx") or existing.get("business_wx", ""),
+            "business_address": meta.get("business_address") or existing.get("business_address", ""),
+            "copyright_url": meta.get("copyright_url") or existing.get("copyright_url", ""),
+        })
 
         # 清洗 None → 空串（现网资料部分字段为 null，None 会导致签名串
         # 出现 business_qq=None 而与 requests 实际发送值不一致 → 签名校验失败）
