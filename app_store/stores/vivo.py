@@ -222,21 +222,26 @@ class VivoAdapter(StoreAdapter):
             state = AuditState.REVIEWING
         elif status == 0:
             state = AuditState.DRAFT
-        # 若 versionName 为空但状态非草稿 → 可能仍在处理中
         if state in (AuditState.PUBLISHED, AuditState.REVIEWING) and not version:
             state = AuditState.UNKNOWN
 
+        # 已上架 vs 审核中分离
+        live_names = [str(version)] if version and state == AuditState.PUBLISHED else []
+        reviewing_names = [str(version)] if version and state != AuditState.PUBLISHED else []
+
         msgs = []
         if state == AuditState.REVIEWING:
-            msgs.append("审核中")
+            if online_type == 2:
+                sche_val = data.get("scheOnlineTime") or data.get("sche_online_time") or ""
+                msgs.append(f"审核通过，定时发布（{sche_val}）" if sche_val else "审核通过，定时发布")
+            else:
+                msgs.append("审核通过，待发布")
         elif state == AuditState.PUBLISHED:
             msgs.append("已上架")
         elif state == AuditState.DRAFT:
             msgs.append("草稿")
         if update_desc:
             msgs.append(f"更新说明: {update_desc}")
-        if online_type == 2:
-            msgs.append("定时上线")
         return StoreStatus(self.platform, package_name, state,
                            live_version_names=[version] if version else [],
                            live_version_codes=[int(vcode)] if str(vcode).isdigit() else [],

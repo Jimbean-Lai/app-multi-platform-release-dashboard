@@ -21,7 +21,7 @@ from typing import Any, Dict, List
 
 from ..base import StoreAdapter, StoreError
 from ..models import AuditState, Platform, Release, SubmitResult, StoreStatus, utcnow_iso
-from ..upload_progress import ProgressFile
+from ..upload_progress import ProgressFile, make_multipart_monitor
 
 _DOMAIN = "https://connect-api.cloud.huawei.com"
 
@@ -193,11 +193,11 @@ class HuaweiAdapter(StoreAdapter):
  """Android：v2 app-info 查询版本状态。"""
  dd = self._get("/api/publish/v2/app-info", {"appId": app_id, "lang": "zh-CN"}, pkg)
  ai = dd.get("appInfo") or {}
- version = ai.get("onShelfVersionNumber") or ai.get("versionNumber") or ""
- vcode = ai.get("onShelfVersionCode") or ai.get("versionCode") or 0
+ live_version = ai.get("onShelfVersionNumber") or ""
+ live_vcode = ai.get("onShelfVersionCode") or None
+ curr_version = ai.get("versionNumber") or ""
+ curr_vcode = ai.get("versionCode") or None
  release_state = ai.get("releaseState")
- names = [str(version)] if version else []
- codes = [int(vcode)] if vcode else []
  # releaseState: 0=已上架 1=审核不通过 2=已下架 3=待上架 4=审核中
  # 5=升级审核中 6=申请下架 7=草稿 8=升级审核不通过 12=预审中
  if release_state in (4, 5, 12):
@@ -210,10 +210,26 @@ class HuaweiAdapter(StoreAdapter):
  state = AuditState.DRAFT
  else:
  state = AuditState.UNKNOWN
+ # 已上架版本
+ live_names = [str(live_version)] if live_version else []
+ live_codes = [int(live_vcode)] if live_vcode else []
+ # 审核中版本
+ reviewing_names = []
+ if curr_version and curr_version != live_version:
+ reviewing_names = [str(curr_version)]
+ # 审核状态文字
+ msg = ""
+ if release_state in (1, 8):
+ msg = "审核未通过"
+ elif release_state == 3:
+ msg = f"审核通过，待发布"
+ elif release_state == 0:
+ msg = "已上架"
  return StoreStatus(
  self.platform, pkg, state,
- live_version_names=names, live_version_codes=codes,
- review_message=f"releaseState={release_state}",
+ live_version_names=live_names, live_version_codes=live_codes,
+ reviewing_version_names=reviewing_names,
+ review_message=msg,
  raw=dd, checked_at=utcnow_iso(),
  )
 
@@ -221,16 +237,35 @@ class HuaweiAdapter(StoreAdapter):
  """HarmonyOS：v3 app-info 直接按 appId 查询。"""
  dd = self._get("/api/publish/v3/app-info", {"appId": app_id}, pkg)
  ai = dd.get("appInfo") or {}
- version = ai.get("onShelfVersionNumber") or ai.get("versionNumber") or ""
+ live_version = ai.get("onShelfVersionNumber") or ""
+ curr_version = ai.get("versionNumber") or ""
  vcode = ai.get("onShelfVersionCode") or ai.get("versionCode") or 0
  release_state = ai.get("releaseState")
- names = [str(version)] if version else []
+ live_names = [str(live_version)] if live_version else []
  codes = [int(vcode)] if vcode else []
- state = AuditState.PUBLISHED if names else AuditState.UNKNOWN
+ if release_state in (4, 5, 12):
+ state = AuditState.REVIEWING
+ elif release_state in (0, 3):
+ state = AuditState.PUBLISHED
+ elif release_state in (1, 8):
+ state = AuditState.REJECTED
+ elif release_state == 7:
+ state = AuditState.DRAFT
+ else:
+ state = AuditState.UNKNOWN
+ reviewing_names = [str(curr_version)] if curr_version and curr_version != live_version else []
+ msg = ""
+ if release_state in (1, 8):
+ msg = "审核未通过"
+ elif release_state == 3:
+ msg = "审核通过，待发布"
+ elif release_state == 0:
+ msg = "已上架"
  return StoreStatus(
  self.platform, pkg, state,
- live_version_names=names, live_version_codes=codes,
- review_message=f"releaseState={release_state} (Harmony)",
+ live_version_names=live_names, live_version_codes=codes,
+ reviewing_version_names=reviewing_names,
+ review_message=(msg + " (Harmony)") if msg else "",
  raw=dd, checked_at=utcnow_iso(),
  )
 

@@ -227,7 +227,6 @@ class OPPOAdapter(StoreAdapter):
         update_desc = data.get("update_desc", "")
         online_type = data.get("online_type")
         sche_time = data.get("sche_online_time", "")
-
         # 状态映射（OPPO 审核状态：111=上线）
         def _to_int(v):
             try:
@@ -244,17 +243,33 @@ class OPPOAdapter(StoreAdapter):
         elif audit_i == 0 or (change_i is not None and change_i != 111):
             state = AuditState.DRAFT
 
+        # 已上架版本：仅 state=PUBLISHED 时当前版本才是线上
+        # 审核中版本：非已上架时当前版本为审核中版本
+        live_names = [str(version)] if version and state == AuditState.PUBLISHED else []
+        live_codes = [int(vcode)] if vcode and state == AuditState.PUBLISHED else []
+        reviewing_names = [str(version)] if version and state != AuditState.PUBLISHED else []
+
+        # 审核状态文字
         msgs = []
-        if audit_name:
-            msgs.append(f"状态: {audit_name}")
-        if update_desc:
-            msgs.append(f"更新说明: {update_desc}")
-        if online_type == 2 and sche_time:
-            msgs.append(f"定时上线: {sche_time}")
+        if state == AuditState.REVIEWING:
+            if audit_name and ("通过" in audit_name):
+                if online_type == 2 and sche_time:
+                    msgs.append(f"审核通过，定时发布（{sche_time}）")
+                else:
+                    msgs.append("审核通过，待发布")
+            elif audit_name and ("不通过" in audit_name or "驳回" in audit_name):
+                msgs.append("审核未通过")
+            else:
+                msgs.append("审核中")
+        elif state == AuditState.REJECTED:
+            msgs.append("审核未通过")
+        elif state == AuditState.DRAFT:
+            msgs.append("草稿")
 
         return StoreStatus(self.platform, package_name, state,
-                           live_version_names=[str(version)] if version else [],
-                           live_version_codes=codes,
+                           live_version_names=live_names,
+                           live_version_codes=live_codes,
+                           reviewing_version_names=reviewing_names,
                            review_message="；".join(msgs),
                            raw=payload, checked_at=utcnow_iso())
 
