@@ -85,6 +85,8 @@ class OPPOAdapter(StoreAdapter):
             self._token = self._get_token(cid, csecret)
             self._token_for = cid
         params = dict(data or {})
+        # 清洗 None 值（requests form 编码对 None 与签名串不一致会导致签名失败）
+        params = {k: (v if v is not None else "") for k, v in params.items()}
         params["access_token"] = self._token
         params["timestamp"] = int(time.time())
         params["api_sign"] = self._sign(csecret, params)
@@ -162,6 +164,10 @@ class OPPOAdapter(StoreAdapter):
         "business_wx": meta.get("business_wx") or existing.get("business_wx", ""),
         "business_address": meta.get("business_address") or existing.get("business_address", ""),
         }
+
+        # 清洗 None → 空串（现网资料部分字段为 null，None 会导致签名串
+        # 出现 business_qq=None 而与 requests 实际发送值不一致 → 签名校验失败）
+        params = {k: (v if v is not None else "") for k, v in params.items()}
 
         if scb: scb("提交资料到 OPPO…")
         # 定时发布
