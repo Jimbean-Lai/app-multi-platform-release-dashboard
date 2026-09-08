@@ -177,10 +177,27 @@ class HuaweiAdapter(StoreAdapter):
  h_app_id = hcred.get("app_id") or ""
  if h_app_id:
  hs = self._query_harmony(harmony_package, h_app_id)
+ # 已上架版本（标注平台）
  android_names = [str(n) + "（Android）" for n in s.live_version_names]
  hnames = [str(n) + "（Harmony）" for n in hs.live_version_names]
  s.live_version_names = android_names + hnames
  s.live_version_codes = list(s.live_version_codes) + list(hs.live_version_codes)
+ # 审核中/待发布版本（标注平台）
+ s.reviewing_version_names = list(s.reviewing_version_names) + list(hs.reviewing_version_names)
+ # 审核状态文字（两平台都保留，标注平台）
+ notes = []
+ if s.audit_note:
+ notes.append(s.audit_note + "（Android）")
+ if hs.audit_note:
+ notes.append(hs.audit_note + "（Harmony）")
+ s.audit_note = "；".join(notes)
+ # 状态合并：任一审核中→审核中；任一待发布→待发布；均通过才已上架
+ if AuditState.REVIEWING in (s.state, hs.state):
+ s.state = AuditState.REVIEWING
+ elif AuditState.PENDING in (s.state, hs.state):
+ s.state = AuditState.PENDING
+ elif AuditState.REJECTED in (s.state, hs.state):
+ s.state = AuditState.REJECTED
  s.review_message = (s.review_message + "；" if s.review_message else "") + hs.review_message
  s.raw = {"android": s.raw, "harmony": hs.raw}
  else:
@@ -274,7 +291,7 @@ class HuaweiAdapter(StoreAdapter):
  self.platform, pkg, state,
  live_version_names=live_names, live_version_codes=codes,
  reviewing_version_names=reviewing_names,
- audit_note=(note + "（Harmony）") if note else "",
+ audit_note=note,
  review_message=f"releaseState={release_state}",
  raw=dd, checked_at=utcnow_iso(),
  )
