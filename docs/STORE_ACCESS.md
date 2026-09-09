@@ -9,7 +9,7 @@
 | API | androidpublisher v3（google-api-python-client） |
 | 认证 | 服务账号 OAuth2（Google Cloud 创建服务账号并授予 Play Console 权限） |
 | 凭证 | `google.service_account_json` |
-| 发布 | ✅ status=draft + changesNotSentForReview=True（仅存草稿，送审在 Console 人工操作） |
+| 发布 | ✅ 支持自动送审：status=completed + edits().commit()（勾选「Google 自动送审」）；不勾则 status=draft + changesNotSentForReview=True 存草稿 |
 | 查询 | ✅ 三态：live（completed）/ draft（未送审）/ reviewing（审核中） |
 
 **注意**：应用若已是 AAB-only，传 APK 会报 `APKs are not allowed for this application`，必须传 AAB。

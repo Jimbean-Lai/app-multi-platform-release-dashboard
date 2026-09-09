@@ -131,15 +131,15 @@ function renderMain(){if(!ST.platforms&&!ST.apps.length){setTimeout(renderMain,2
 var h='<div class=app-head><h2>'+esc(a.name)+'</h2>'+(a.category_display?'<span class=badge>'+esc(a.category_display)+'</span>':'')+(a.package_name?'<span class="badge" style=color:var(--ok)>'+esc(a.package_name)+'</span>':'<span class="badge err">未配包名</span>')+'<span class=muted>'+(a.version_name?"v"+esc(a.version_name):"")+"</span></div>";
 h+='<div class=grid><div class=card><h3>应用信息</h3>'+
 '<div class=row><span class=k>包名</span><span class=v>'+esc(a.package_name||"未填")+'</span></div>'+
-'<div class=row><span class=k>versionName</span><span class=v>'+esc(a.version_name||"-")+'</span></div>'+
-'<div class=row><span class=k>versionCode</span><span class=v>'+(a.version_code==null?"-":a.version_code)+'</span></div>'+(a.huawei_harmony_package?'<div class=row><span class=k>华为 Harmony 包</span><span class=v>'+esc(a.huawei_harmony_package)+'</span></div>':"")+'</div>';
+'<div class=row><span class=k>versionName</span><span class=v>-</span></div>'+
+'<div class=row><span class=k>versionCode</span><span class=v>-</span></div>'+(a.huawei_harmony_package?'<div class=row><span class=k>华为 Harmony 包</span><span class=v>'+esc(a.huawei_harmony_package)+'</span></div>':"")+'</div>';
 h+='<div class=card><h3>构建产物</h3>'+
 '<div class=input-row><input id=paab value="" placeholder="AAB (Google Play)"><button class=sm secondary onclick=selBuild("aab")>选择…</button><button class=sm secondary onclick=clr("paab")>清</button></div>'+
 '<div class=input-row><input id=papk value="" placeholder="APK (国内平台)"><button class=sm secondary onclick=selBuild("apk")>选择…</button><button class=sm secondary onclick=clr("papk")>清</button></div>'+
-(a.aab_exists?'<span class=badge style=color:var(--ok)>AAB 存在</span> ':"")+(a.apk_exists?'<span class=badge style=color:var(--ok)>APK 存在</span>':"")+'<div id=papkAlert style=font-size:12px;margin:4px 0;min-height:16px></div><div style=margin-top:4px><button onclick=pth()>保存路径</button></div></div>';
+'<div id=papkAlert style=font-size:12px;margin:4px 0;min-height:16px></div><div style=margin-top:4px><button onclick=pth()>保存路径</button></div></div>';
 h+='<div class=card><h3>发布</h3>'+
-'<div><label>版本名</label><input id=ipvn readonly value="'+(a.version_name||"")+'"></div>'+
-'<div><label>versionCode</label><input id=ipvc readonly value="'+(a.version_code==null?"":a.version_code)+'"></div>'+
+'<div><label>版本名</label><input id=ipvn readonly value=""></div>'+
+'<div><label>versionCode</label><input id=ipvc readonly value=""></div>'+
 '<div><label>发布平台（可多选，Apple 仅查询）</label><div id=ipp style=display:flex;flex-wrap:wrap;gap:8px>'+publishPlatsHTML()+'</div><div style=margin-top:6px><button type=button class=sm secondary onclick=platAll(1)>全选</button> <button type=button class=sm secondary onclick=platAll(0)>清空</button></div></div>'+
 '<div><label>轨道（Google）</label><select id=ipv><option>production</option><option>beta</option><option>alpha</option><option>internal</option></select></div>'+
 '<div><label>更新说明</label><textarea id=ipn rows=2></textarea><div class=form-group><label>定时上线（留空=立即）</label><input id=pot type=datetime-local></div></div>'+
