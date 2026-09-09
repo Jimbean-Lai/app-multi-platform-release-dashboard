@@ -309,6 +309,7 @@ class GoogleAdapter(StoreAdapter):
         draft_names: List[str] = []
         reviewing_names: List[str] = []
         review_msgs: List[str] = []
+        audit_note: str = ""
         any_in_progress = False
         any_completed = False
 
@@ -358,6 +359,15 @@ class GoogleAdapter(StoreAdapter):
         else:
             state = AuditState.UNKNOWN
 
+        # Managed Publishing 模式：completed 版本为"审核通过待发布"（非已上架）
+        if state == AuditState.PUBLISHED and self.credentials.get("managed_publishing"):
+            state = AuditState.PENDING
+            if live_names:
+                reviewing_names = live_names + reviewing_names
+                audit_note = "，".join(live_names) + " 审核通过，待发布（需在 Play Console 手动发布）"
+                live_names = []
+                live_codes = []
+
         extra = {}
         if beta_names:
             extra["beta_version_names"] = beta_names
@@ -373,6 +383,7 @@ class GoogleAdapter(StoreAdapter):
             live_version_names=live_names,
             draft_version_names=draft_names,
             reviewing_version_names=reviewing_names,
+            audit_note=audit_note,
             review_message="；".join(review_msgs) or ("各轨道当前无发布记录" if not raw_tracks else ""),
             checked_at=utcnow_iso(),
             raw=raw_tracks,
