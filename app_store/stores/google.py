@@ -88,6 +88,27 @@ class GoogleAdapter(StoreAdapter):
             return c
         return self.credentials
 
+    def _play_page_version(self, package_name: str) -> str:
+        """从 Google Play 商店页面抓取当前已上架版本（What's New 版本）。
+
+        用于 Managed Publishing 模式下区分"待发布"与"已上架"：
+        页面显示的版本号即真正已上架版本。失败/超时返回空串（不阻塞查询）。
+        """
+        try:
+            import subprocess
+            import sys as _sys
+            probe = Path(__file__).resolve().parent.parent / "play_version_probe.py"
+            if not probe.is_file():
+                return ""
+            py = getattr(_sys, "executable", "python3")
+            proc = subprocess.run(
+                [py, "-B", str(probe), package_name],
+                capture_output=True, text=True, timeout=30,
+            )
+            return (proc.stdout or "").strip()
+        except Exception:
+            return ""
+
     def _load_creds(self, pkg: str = "") -> Dict[str, Any]:
         cred = self._cred_for(pkg) if pkg else self.credentials
         value = cred.get("service_account_json") or ""
@@ -366,6 +387,11 @@ class GoogleAdapter(StoreAdapter):
                 reviewing_names = live_names + reviewing_names
                 audit_note = "，".join(live_names) + " 审核通过，待发布（需在 Play Console 手动发布）"
                 live_names = []
+                live_codes = []
+            # 尝试从 Play 商店页面取真实已上架版本（能拿到就显示在"已上架版本"）
+            page_ver = self._play_page_version(package_name)
+            if page_ver:
+                live_names = [page_ver]
                 live_codes = []
 
         extra = {}
