@@ -30,7 +30,7 @@
 | OPPO 软件商店 | ✅ | ✅ | ✅ | 更新自动复用现有发布资料 |
 | vivo 应用商店 | ✅ | ✅ | ✅ | 上传 APK → 同步更新 |
 | 荣耀应用市场 | ✅ | ✅ | ✅ | 审核结果含审核意见 |
-| 华为 AppGallery | ✅ | ✅ | ✅ | OBS 上传 APK（fileType=3 安卓） |
+| 华为 AppGallery | ✅ | ✅ | ✅ | upload-url + multipart 直传 + app-file-info 绑定（ 流程） |
 
 ## 项目结构
 

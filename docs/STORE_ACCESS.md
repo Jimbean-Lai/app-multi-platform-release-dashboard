@@ -65,7 +65,7 @@
 | OpenAPI | https://appmarket-openapi-drcn.cloud.honor.com/openapi/v1/publish |
 | 接口 | `get-app-id` / `get-app-detail` / `get-app-current-release` / `get-file-upload-url` / `file-upload` / `update-app-info` / `submit-audit` / `get-audit-result` |
 | 凭证 | `client_id` / `client_secret`（账号级，可管理账号下所有应用） |
-| 定时 | ✅ `publishType=2` + 定时时间 |
+| 定时 | ✅ `releaseType=2` + `releaseTime`（submit-audit） |
 | 查询 | `auditResult`：0 审核中 / 1 通过 / 2 不通过 / 4 编辑未提交 |
 
 ## 华为 AppGallery
@@ -74,7 +74,7 @@
 | --- | --- |
 | Token | POST https://connect-api.cloud.huawei.com/api/oauth2/v1/token（JSON body） |
 | OpenAPI | https://connect-api.cloud.huawei.com/api/publish/v2（**Android**）/ v3（HarmonyOS 5+） |
-| 接口 | `appid-list` / `app-info` / `upload-url/for-obs` / 上传 OBS / `app-submit` |
+| 接口 | `appid-list` / `app-info` / `upload-url`(authCode) / multipart 直传 / `app-file-info`(fileType=5 绑定) / `app-info`(newFeatures) / `app-submit` |
 | 凭证 | `client_id`（19 位 **API 客户端 project_client_id**）/ `client_secret` / `app_id` |
 | 定时 | ✅ `releaseTime`（UTC："yyyy-MM-ddTHH:mm:ssZZ"） |
 
@@ -82,4 +82,4 @@
 - 必须使用 AGC 控制台 → 用户与访问 → API 凭证 创建的 **project_client_id 类型** API 客户端（19 位 client_id + 64 位 secret）
 - 「常规」页的 OAuth2.0 client_id（= App ID）不能调发布 API（一律 403）
 - 一个 API client 属于一个项目，只能管理该项目下应用；华为/荣耀/小米等**不同应用可各自建 client**
-- fileType：3=安卓 APK/AAB，1=鸿蒙 RPK/HAP
+- 发布绑定文件用 fileType=5（APK）；上传地址接口为 `upload-url`（非 `for-obs`），返回 uploadUrl+authCode 后 multipart 直传
