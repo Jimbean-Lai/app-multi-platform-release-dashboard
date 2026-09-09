@@ -1,16 +1,12 @@
-MIT License
+非商业使用许可证 (Non-Commercial License)
 
 Copyright (c) 2026 Jimbean-Lai
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+任何人皆可自由阅读、修改本专案源码。但本软体禁止任何「商业目的之使用」，
+包含但不限于：企业内部部署、使用本工具为第三方客户提供 App 上架服务、
+或透过本工具直接/间接获利。
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+欲进行上述行为之企业用户，请务必联系作者购买企业授权。
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,

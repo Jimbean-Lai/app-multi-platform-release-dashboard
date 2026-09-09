@@ -1,6 +1,5 @@
 # App 多平台发布看板（App Multi-Platform Release Dashboard）
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub stars](https://img.shields.io/github/stars/Jimbean-Lai/app-multi-platform-release-dashboard?style=social)](https://github.com/Jimbean-Lai/app-multi-platform-release-dashboard/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/Jimbean-Lai/app-multi-platform-release-dashboard?style=social)](https://github.com/Jimbean-Lai/app-multi-platform-release-dashboard/network)
 
