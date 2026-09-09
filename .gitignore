@@ -32,3 +32,6 @@ apps/catalog.json
 # 自动生成的发布任务历史（每次重启覆盖，不入库）
 config/tasks_history.json*
 .venv-setup.log
+
+# 给平台客服的需求反馈文档（不公开）
+docs/开放平台API能力需求-已上架版本号.md

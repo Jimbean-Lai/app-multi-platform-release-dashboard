@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """华为 AppGallery 适配器（Publishing API v2，Android）。
 
-发布流程：
+发布流程（基于华为 AppGallery Publishing API v2 官方接口行为）：
 1. appid-list -> 获取 appId
 2. upload-url -> 获取上传地址 + authCode
 3. multipart 直传 APK 到 FileServer
@@ -105,7 +105,7 @@ class HuaweiAdapter(StoreAdapter):
  max_attempts: int = 8, interval: int = 30) -> dict:
  """提交发布，APK 解析中(204144660 parsing / 204144727 compiling)时轮询重试。
 
- 参考：华为解析 APK 需 1-2 分钟（大包更久），报解析中错误应重试
+ 华为解析 APK 需 1-2 分钟（大包更久），报解析中错误应重试
  而非直接失败。每次失败都提示去 AGC 后台完成。
  """
  import time as _t
@@ -324,7 +324,7 @@ class HuaweiAdapter(StoreAdapter):
  raise StoreError(f"华为未找到 {pkg} 的 appId")
 
  if scb: scb("获取华为上传地址…")
- # 2) upload-url（ 参考：GET upload-url 返回 uploadUrl+authCode）
+ # 2) upload-url（GET 返回 uploadUrl+authCode）
  import requests
  file_size = os.path.getsize(apk)
  up = self._get(
@@ -338,7 +338,7 @@ class HuaweiAdapter(StoreAdapter):
  raise StoreError(f"华为未返回上传地址: {up}")
 
  if scb: scb("上传 APK 到华为…")
- # 3) multipart 直传（ 参考：fields authCode/fileCount/name/parseType + file）
+ # 3) multipart 直传（fields: authCode/fileCount/name/parseType + file）
  pc = (release.metadata or {}).get("_progress_cb")
  apk_name = os.path.basename(apk)
  if pc:
@@ -373,7 +373,7 @@ class HuaweiAdapter(StoreAdapter):
  if not file_dest_url:
  raise StoreError(f"华为上传缺 fileDestUrl: {r_up.text[:300]}")
 
- # 4) 绑定文件到版本（ 参考：PUT app-file-info, fileType=5 APK）
+ # 4) 绑定文件到版本（PUT app-file-info, fileType=5 APK）
  if scb: scb("绑定 APK 文件到版本…")
  self._put("/api/publish/v2/app-file-info", pkg, query={"appId": app_id, "releaseType": 1}, body={
  "fileType": 5,
