@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from pathlib import Path
 from typing import Any, Dict, List
@@ -380,19 +381,34 @@ class GoogleAdapter(StoreAdapter):
         else:
             state = AuditState.UNKNOWN
 
-        # Managed Publishing 模式：completed 版本为"审核通过待发布"（非已上架）
+        # Managed Publishing 模式：completed 版本可能是"待发布"或"已上架"。
+        # 用 Play 商店页面当前版本号自动判断：
+        #   页面版本 == API completed 版本 → 已真正上架（保持 PUBLISHED）
+        #   页面版本 < API completed 版本 → 审核通过待发布（PENDING）
         if state == AuditState.PUBLISHED and self.credentials.get("managed_publishing"):
-            state = AuditState.PENDING
-            if live_names:
-                reviewing_names = live_names + reviewing_names
-                audit_note = "，".join(live_names) + " 审核通过，待发布（需在 Play Console 手动发布）"
-                live_names = []
-                live_codes = []
-            # 尝试从 Play 商店页面取真实已上架版本（能拿到就显示在"已上架版本"）
+            # API completed 版本的语义版本号（如 "202508532 (4.19.2)" -> "4.19.2"）
+            api_semver = ""
+            for _nm in live_names:
+                _m = re.search(r"(\d+\.\d+\.\d+)", _nm)
+                if _m:
+                    api_semver = _m.group(1)
+                    break
             page_ver = self._play_page_version(package_name)
-            if page_ver:
-                live_names = [page_ver]
-                live_codes = []
+            if page_ver and api_semver and page_ver == api_semver:
+                # 页面版本与 API 版本一致 → 已发布到商店
+                pass  # 保持 PUBLISHED（已上架）
+            else:
+                # 页面版本更旧或获取不到 → 审核通过待发布
+                state = AuditState.PENDING
+                if live_names:
+                    reviewing_names = live_names + reviewing_names
+                    audit_note = "，".join(live_names) + " 审核通过，待发布（需在 Play Console 手动发布）"
+                    live_names = []
+                    live_codes = []
+                # 能拿到页面版本则显示为真实已上架版本
+                if page_ver:
+                    live_names = [page_ver]
+                    live_codes = []
 
         extra = {}
         if beta_names:
