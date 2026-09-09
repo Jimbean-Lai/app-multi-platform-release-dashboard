@@ -1,17 +1,22 @@
-非商业使用许可证 (Non-Commercial License)
+非商业使用许可证（Non-Commercial License）
 
-Copyright (c) 2026 Jimbean-Lai
+版本 1.0 — 2026
+版权所有（c）2026 Jimbean-Lai
 
-任何人皆可自由阅读、修改本专案源码。但本软体禁止任何「商业目的之使用」，
-包含但不限于：企业内部部署、使用本工具为第三方客户提供 App 上架服务、
-或透过本工具直接/间接获利。
+一、允许的自由使用
+任何人可以自由阅读、复制、修改、分发本软件源码，前提是遵守本许可证的条款。
 
-欲进行上述行为之企业用户，请务必联系作者购买企业授权。
+二、禁止的商业使用
+本软件禁止一切商业目的之使用，包括但不限于：
+1. 企业内部部署，用于公司的生产经营活动；
+2. 使用本工具为第三方客户提供 App 发布/上架等收费服务；
+3. 通过本软件的任何形式直接或间接获利。
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+三、商业授权
+企业用户或个人若需将本软件用于商业目的，须先联系作者获得书面授权。
+
+联系方式：junbin.lai@outlook.com
+
+四、免责声明
+本软件按"原样"提供，不附带任何明示或默示的担保。
+作者不对因使用本软件产生的任何直接或间接损失承担责任。
