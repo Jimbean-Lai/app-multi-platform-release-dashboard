@@ -39,5 +39,5 @@ config/tasks_history.json*
 # 换肤前的前端备份（本地保留，不入库）
 app_store/templates/*.bak*
 
-# 给平台客服的需求反馈文档（不公开）
-docs/开放平台API能力需求-已上架版本号.md
+# 需求反馈+调研整合文档（含待填联系方式，不公开）
+docs/开放平台API能力需求与调研.md
