@@ -401,7 +401,8 @@ class GoogleAdapter(StoreAdapter):
                 # 页面版本更旧或获取不到 → 审核通过待发布
                 state = AuditState.PENDING
                 if live_names:
-                    reviewing_names = live_names + reviewing_names
+                    # 版本号只进 audit_note（审核状态行展示），不进"审核中"列表：
+                    # 该版本已审核通过，语义是"待发布"而非"审核中"
                     audit_note = "，".join(live_names) + " 审核通过，待发布（需在 Play Console 手动发布）"
                     live_names = []
                     live_codes = []
