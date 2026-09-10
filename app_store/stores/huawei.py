@@ -411,3 +411,43 @@ class HuaweiAdapter(StoreAdapter):
             state=AuditState.SUBMITTED,
             raw=payload,
         )
+
+    # ---------- 立即上线 ----------
+    def release_now(self, package_name: str) -> dict:
+        """审核通过但未到定时上架时间(releaseState=3 待上架)的版本改为立即上架。
+
+        使用华为「更新版本上架时间」接口：
+        PUT /api/publish/v2/on-shelf-time
+          changeType=2  指定时间上架改为审核通过立即上架
+          changeType=3  变更定时上架时间（releaseTime 必填）
+        releaseType 目前仅支持 1=全网。
+        """
+        pkg = package_name
+        cred = self._cred_for(pkg)
+        if cred.get("app_kind", "android") == "harmony":
+            raise StoreError("华为 Harmony 应用请在 AGC 控制台操作立即上架")
+
+        d = self._get("/api/publish/v2/appid-list", {"packageName": pkg}, pkg)
+        appids = d.get("appids") or []
+        app_id = None
+        for a in appids:
+            if a.get("value"):
+                app_id = a["value"]
+                break
+        if not app_id:
+            raise StoreError(f"华为未找到 {pkg} 的 appId")
+
+        import datetime as _dt
+        body = {
+            "changeType": 2,  # 指定时间上架 → 审核通过立即上架
+            # releaseTime 标记必选但 changeType=2 时以官方说明"changeType为3时有效"为准，
+            # 这里传当前时间占位，避免部分网关强校验缺参
+            "releaseTime": _dt.datetime.now().strftime("%Y-%m-%dT%H:%M:%S+0800"),
+            "releaseType": 1,  # 全网（目前仅支持全网）
+        }
+        self._put("/api/publish/v2/on-shelf-time", pkg, query={"appId": app_id}, body=body)
+        return {
+            "app_id": app_id,
+            "changeType": 2,
+            "message": "已请求改为审核通过立即上架（原定时时间作废）",
+        }

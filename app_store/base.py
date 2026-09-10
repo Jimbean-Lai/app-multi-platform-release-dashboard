@@ -44,3 +44,11 @@ class StoreAdapter(ABC):
     @abstractmethod
     def query_status(self, package_name: str) -> StoreStatus:
         """查询审核进度与已上架版本。"""
+
+    def release_now(self, package_name: str) -> dict:
+        """审核通过但未到定时上架时间的版本改为立即上架。
+
+        仅官方提供该能力的平台实现（华为 on-shelf-time 接口）；
+        其余平台保持默认抛错。
+        """
+        raise StoreError(f"{self.display_name or self.platform.value} 官方未提供「审核通过后立即上线」接口")

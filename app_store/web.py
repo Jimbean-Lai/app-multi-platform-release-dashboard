@@ -311,6 +311,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._api_update_app(body)
             if path == "/api/apk/meta":
                 return self._api_apk_meta(body)
+            if path == "/api/release-now":
+                return self._api_release_now(body)
             if path == "/api/tasks/clear":
                 return self._api_tasks_clear()
             return _json_response(self, {"error": "not found"}, 404)
@@ -409,6 +411,30 @@ class Handler(BaseHTTPRequestHandler):
             raise StoreError("缺少 path")
         info = parse_build(path)
         return _json_response(self, {"ok": True, **info})
+
+    def _api_release_now(self, body: Dict[str, Any]):
+        """审核通过待上架（定时未到时间）的版本改为立即上架。
+
+        目前仅华为提供官方接口（on-shelf-time changeType=2）；
+        其余平台适配器 release_now 默认抛 StoreError，前端只在
+        华为"待发布"状态卡上展示按钮。
+        """
+        app_id = body.get("app_id") or ""
+        if not app_id:
+            raise StoreError("缺少 app_id")
+        app = self._catalog().get_app(app_id)
+        package = app.get("package_name") or ""
+        if not package:
+            raise StoreError(f"应用 {app_id} 尚未配置 package_name")
+        platform = (body.get("platform") or "huawei").lower()
+        creds = load_credentials(self.credentials_path)
+        if platform not in creds:
+            raise StoreError(f"未配置 {platform} 凭证")
+        adapter = get_adapter(platform, creds)
+        result = adapter.release_now(package)
+        return _json_response(self, {
+            "ok": True, "platform": platform, "package": package, "result": result,
+        })
 
     def _api_tasks_clear(self):
         """清空发布历史：删除落盘文件 + 清理内存中的稳定任务。"""
