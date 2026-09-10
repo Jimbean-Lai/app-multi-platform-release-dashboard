@@ -277,13 +277,19 @@ var W=640,PX=34,HEAD=104,ROW=66,FOOT=44,SC=2;
 var rows=list.map(function(x){
 var live=(x.live_version_names&&x.live_version_names.length?x.live_version_names:(x.live_version_codes||[]).map(String)).join(", ");
 var rev=(x.reviewing_version_names||[]).join(", ");var draft=(x.draft_version_names||[]).join(", ");var note=(x.audit_note||"").trim();
-var parts=[];if(live)parts.push("已上架 "+live);if(rev)parts.push("审核中 "+rev);if(draft)parts.push("草稿 "+draft);
-var info=parts.join(" · ");if(!info)info=note||"—";else if(note&&note!==stat(x.state))info+=" · "+note;
-return{name:nm[x.platform]||x.platform,badge:bd[x.state]||bd.unknown,info:info}});
+var lines=[];
+if(live)lines.push({l:"已上架",v:live});
+if(rev)lines.push({l:"审核中",v:rev});
+if(draft)lines.push({l:"草稿",v:draft});
+if(note&&note!==stat(x.state))lines.push({l:"",v:note});
+if(!lines.length)lines.push({l:"",v:"—"});
+return{name:nm[x.platform]||x.platform,badge:bd[x.state]||bd.unknown,lines:lines}});
 var t0="";for(var i=0;i<list.length;i++){if(list[i].checked_at){t0=list[i].checked_at;break}}
 var d=t0?new Date(t0):new Date();function p2(n){return(n<10?"0":"")+n}
 var ts=d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate())+" "+p2(d.getHours())+":"+p2(d.getMinutes());
-var H=HEAD+rows.length*ROW+FOOT;
+var LH=19;
+var rowHs=rows.map(function(r){return 42+r.lines.length*LH+8});
+var H=HEAD+rowHs.reduce(function(p,q){return p+q},0)+FOOT;
 var cv=document.createElement("canvas");cv.width=W*SC;cv.height=H*SC;var c=cv.getContext("2d");c.scale(SC,SC);
 function rr(x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath()}
 function fit(t,f,maxw){c.font=f;var s=String(t);if(c.measureText(s).width<=maxw)return s;while(s.length>1&&c.measureText(s+"…").width>maxw)s=s.slice(0,-1);return s+"…"}
@@ -306,9 +312,14 @@ var bt=r.badge[0];c.font="600 12px "+FONT;var tw=c.measureText(bt).width;
 var bx=W-PX-tw-16,by=y+9,bh=21;
 c.fillStyle=r.badge[1];rr(bx,by,tw+16,bh,10.5);c.fill();
 c.fillStyle=r.badge[2];c.fillText(bt,bx+8,by+15);
-c.font="400 12.5px "+FONT;c.fillStyle="#6e6e73";c.fillText(fit(r.info,"400 12.5px "+FONT,W-2*IX),IX,y+46);
-if(idx<rows.length-1){c.strokeStyle="rgba(0,0,0,.08)";c.beginPath();c.moveTo(IX,y+ROW-7);c.lineTo(W-PX,y+ROW-7);c.stroke()}
-y+=ROW});
+var ly=y+44;
+r.lines.forEach(function(o){
+c.font="400 12.5px "+FONT;var lx=IX;
+if(o.l){c.fillStyle="#86868b";c.fillText(o.l,IX,ly);lx=IX+c.measureText(o.l).width+12}
+c.fillStyle="#3a3a3c";c.fillText(fit(o.v,"400 12.5px "+FONT,W-PX-lx),lx,ly);ly+=LH});
+var rh=rowHs[idx];
+if(idx<rows.length-1){c.strokeStyle="rgba(0,0,0,.08)";c.beginPath();c.moveTo(IX,y+rh-5);c.lineTo(W-PX,y+rh-5);c.stroke()}
+y+=rh});
 c.font="400 11px "+FONT;c.fillStyle="#aeaeb2";var ft="— 由 App 发布看板生成 —";c.fillText(ft,(W-c.measureText(ft).width)/2,H-18);
 function okToast(){toast("图片已复制到剪贴板，可直接粘贴分享")}
 function fb(){try{var u=cv.toDataURL("image/png");var l=document.createElement("a");l.href=u;l.download=(a.name||"app")+"-发布状态.png";l.click();toast("剪贴板不可用，已为您下载图片")}catch(e){toast("生成失败","err")}}
