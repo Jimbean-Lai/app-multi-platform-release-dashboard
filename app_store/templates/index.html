@@ -265,6 +265,11 @@ e.innerHTML=h}
 function shareStatus(){
 var list=ST.statuses||[],a=ST.cur;
 if(!list.length||!a){toast("请先查询状态","err");return}
+var ic=new Image();
+ic.onload=function(){drawShareCard(list,a,ic)};
+ic.onerror=function(){drawShareCard(list,a,null)};
+ic.src="/api/app/icon?app_id="+encodeURIComponent(a.id)}
+function drawShareCard(list,a,ic){
 var nm={huawei:"华为",oppo:"OPPO",vivo:"VIVO",xiaomi:"小米",honor:"荣耀",google:"Google Play",apple:"Apple"};
 var bd={published:["已上架","#e8f6ec","#1d8a3e"],reviewing:["审核中","#fdf0e7","#c93400"],pending:["待发布","#e8f1fd","#0066cc"],draft:["草稿","#f0f4f8","#43688c"],submitted:["已提交","#f0f4f8","#43688c"],rejected:["已拒绝","#fdeceb","#d70015"],unknown:["未知","#f2f2f7","#86868b"]};
 var FONT='-apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
@@ -285,10 +290,15 @@ function fit(t,f,maxw){c.font=f;var s=String(t);if(c.measureText(s).width<=maxw)
 c.fillStyle="#f5f5f7";c.fillRect(0,0,W,H);
 c.fillStyle="#ffffff";rr(10,10,W-20,H-20,16);c.fill();
 c.strokeStyle="rgba(0,0,0,.06)";c.lineWidth=1;rr(10.5,10.5,W-21,H-21,16);c.stroke();
-var IX=PX;
-c.font="600 23px "+FONT;var title=fit(a.name,"600 23px "+FONT,W-2*IX);c.font="600 23px "+FONT;c.fillStyle="#1d1d1f";c.fillText(title,IX,56);
-c.font="400 13px "+FONT;c.fillStyle="#86868b";c.fillText("App 发布状态 · 查询于 "+ts,IX,80);
-c.fillStyle="#0071e3";rr(IX,92,34,3,1.5);c.fill();
+var IX=PX,TX=IX;
+if(ic){var cy=50,r=26;TX=IX+66;
+c.save();c.beginPath();c.arc(IX+r,cy,r,0,Math.PI*2);c.clip();
+var s=Math.max(2*r/ic.width,2*r/ic.height),dw=ic.width*s,dh=ic.height*s;
+c.drawImage(ic,IX+r-dw/2,cy-dh/2,dw,dh);c.restore();
+c.strokeStyle="rgba(0,0,0,.1)";c.lineWidth=1;c.beginPath();c.arc(IX+r,cy,r,0,Math.PI*2);c.stroke()}
+c.font="600 23px "+FONT;var title=fit(a.name,"600 23px "+FONT,W-TX-PX);c.font="600 23px "+FONT;c.fillStyle="#1d1d1f";c.fillText(title,TX,ic?44:56);
+c.font="400 13px "+FONT;c.fillStyle="#86868b";c.fillText("App 发布状态 · 查询于 "+ts,TX,ic?68:80);
+c.fillStyle="#0071e3";rr(TX,ic?82:92,34,3,1.5);c.fill();
 var y=HEAD;
 rows.forEach(function(r,idx){
 c.font="600 16px "+FONT;c.fillStyle="#1d1d1f";c.fillText(fit(r.name,"600 16px "+FONT,220),IX,y+24);

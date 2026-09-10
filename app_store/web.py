@@ -14,13 +14,15 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
+import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, List
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
-from .apk_meta import parse_build, parse_apk
+from .apk_meta import extract_apk_icon, parse_build, parse_apk
 from .base import StoreError
 from .catalog import get_catalog
 from .config import load_credentials
@@ -73,6 +75,43 @@ def _html_response(handler: BaseHTTPRequestHandler, html: str, status: int = 200
     handler.send_header("Content-Length", str(len(body)))
     handler.end_headers()
     handler.wfile.write(body)
+
+
+_ICON_EXTS = ((".png", "image/png"), (".webp", "image/webp"), (".jpg", "image/jpeg"), (".jpeg", "image/jpeg"))
+
+
+def _bytes_response(handler: BaseHTTPRequestHandler, body: bytes, ctype: str, status: int = 200) -> None:
+    handler.send_response(status)
+    handler.send_header("Content-Type", ctype)
+    handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Cache-Control", "public, max-age=86400")
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+def _http_get_bytes(url: str, timeout: int = 30) -> tuple:
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                                  "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = resp.read()
+    ctype = (resp.headers.get("Content-Type") or "").split(";")[0].strip() or "application/octet-stream"
+    return data, ctype
+
+
+def _play_store_icon(package_name: str) -> tuple:
+    """Google Play 商店页抓应用图标（read-only，页面服务端渲染含图标 img）。"""
+    from urllib.parse import quote
+    url = "https://play.google.com/store/apps/details?id=" + quote(package_name)
+    req = urllib.request.Request(url, headers={
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                      "(KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9"})
+    with urllib.request.urlopen(req, timeout=25) as resp:
+        html = resp.read().decode("utf-8", "replace")
+    m = re.search(r'https://play-lh\.googleusercontent\.com/[A-Za-z0-9_-]+', html)
+    if not m:
+        raise StoreError("Play 商店页未找到图标 URL")
+    return _http_get_bytes(m.group(0))
 
 
 def _read_body(handler: BaseHTTPRequestHandler) -> Dict[str, Any]:
@@ -271,6 +310,8 @@ class Handler(BaseHTTPRequestHandler):
                     "apps": [catalog.status_payload(a["id"]) for a in catalog.all_apps()],
                 }
                 return _json_response(self, payload)
+            if path == "/api/app/icon":
+                return self._api_app_icon()
             if path == "/api/platforms":
                 return _json_response(self, list_platforms())
             if path == "/api/config":
@@ -435,6 +476,71 @@ class Handler(BaseHTTPRequestHandler):
         return _json_response(self, {
             "ok": True, "platform": platform, "package": package, "result": result,
         })
+
+    def _api_app_icon(self):
+        """应用图标（供分享图）：catalog.icon 显式配置 > APK 提取 > Apple artwork > Play 商店页。
+
+        结果缓存到 <catalog目录>/icons/{app_id}.{ext}，浏览器侧另有 max-age 缓存。
+        """
+        qs = parse_qs(urlparse(self.path).query)
+        app_id = (qs.get("app_id") or [""])[0].strip()
+        if not app_id:
+            raise StoreError("缺少 app_id")
+        app = self._catalog().get_app(app_id)
+        icons_dir = os.path.join(os.path.dirname(os.path.abspath(self.catalog_path)), "icons")
+        os.makedirs(icons_dir, exist_ok=True)
+        # 1) 本地缓存
+        for ext, ctype in _ICON_EXTS:
+            p = os.path.join(icons_dir, app_id + ext)
+            if os.path.isfile(p):
+                with open(p, "rb") as f:
+                    return _bytes_response(self, f.read(), ctype)
+        # 2) 逐来源尝试
+        errors: List[str] = []
+        data, ctype = b"", ""
+        icon_ref = str(app.get("icon") or "").strip()
+        if icon_ref:  # 显式配置优先
+            try:
+                if icon_ref.startswith(("http://", "https://")):
+                    data, ctype = _http_get_bytes(icon_ref)
+                elif os.path.isfile(icon_ref):
+                    with open(icon_ref, "rb") as f:
+                        data = f.read()
+                    ctype = dict(_ICON_EXTS).get(os.path.splitext(icon_ref)[1].lower(), "image/png")
+                else:
+                    errors.append("catalog.icon 路径不存在")
+            except Exception as e:
+                errors.append(f"catalog.icon: {e}")
+        package = app.get("package_name") or ""
+        if not data:
+            apk_path = str(app.get("apk_build") or "")
+            if apk_path and os.path.isfile(apk_path):
+                try:
+                    data, ctype = extract_apk_icon(apk_path)
+                except Exception as e:
+                    errors.append(f"APK: {e}")
+            else:
+                errors.append("APK 未配置或不存在")
+        if not data and package:
+            try:
+                creds = load_credentials(self.credentials_path)
+                if creds.get("apple"):
+                    adapter = get_adapter("apple", creds)
+                    data, ctype = adapter.fetch_icon(package)
+            except Exception as e:
+                errors.append(f"Apple: {e}")
+        if not data and package:
+            try:
+                data, ctype = _play_store_icon(package)
+            except Exception as e:
+                errors.append(f"Play: {e}")
+        if not data:
+            raise StoreError("未找到应用图标（" + "; ".join(errors[:3]) + "）；可在 catalog 为应用配置 icon 字段（本地路径或 URL）")
+        # 3) 写缓存
+        ext = next((e for e, t in _ICON_EXTS if t == ctype), ".png")
+        with open(os.path.join(icons_dir, app_id + ext), "wb") as f:
+            f.write(data)
+        return _bytes_response(self, data, ctype)
 
     def _api_tasks_clear(self):
         """清空发布历史：删除落盘文件 + 清理内存中的稳定任务。"""

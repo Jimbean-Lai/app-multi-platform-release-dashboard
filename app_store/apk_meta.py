@@ -12,6 +12,7 @@ AAB 的 AndroidManifest.xml 是 protobuf 序列化的 XmlNode 树：
 from __future__ import annotations
 
 import os
+import re
 import zipfile
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -48,6 +49,55 @@ def parse_apk(path: str) -> Dict[str, Any]:
     if not package:
         raise StoreError("APK 解析未取到 package（文件可能损坏或不是合法 APK）")
     return {"package_name": package, "version_name": vname or "", "version_code": vcode, "label": label or package}
+
+
+_ICON_CAND_PAT = re.compile(r"^res/mipmap[^/]*/[^/]+\.(png|webp|jpg|jpeg)$", re.I)
+_ICON_DENSITY_RANK = ("xxxhdpi", "xxhdpi", "xhdpi", "hdpi", "mdpi")
+
+
+def _icon_ctype(name: str) -> str:
+    ext = os.path.splitext(name)[1].lower()
+    return {".png": "image/png", ".webp": "image/webp", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}.get(ext, "application/octet-stream")
+
+
+def extract_apk_icon(path: str) -> Tuple[bytes, str]:
+    """从 APK 提取应用启动图标的原始字节。
+
+    优先用 androguard 解析资源引用（可正确处理 adaptive icon / 资源别名），
+    失败则回退到 mipmap 目录启发式（取最高密度的 ic_launcher）。
+    返回 (bytes, content_type)。
+    """
+    if not path or not os.path.isfile(path):
+        raise StoreError(f"APK 文件不存在: {path!r}")
+    try:
+        import logging
+        logging.getLogger("androguard").setLevel(logging.ERROR)
+        try:
+            from loguru import logger as loguru_logger
+            loguru_logger.disable("androguard")
+        except ImportError:
+            pass
+        from androguard.core.apk import APK
+        apk = APK(path)
+        icon = (apk.get_app_icon() or "").lstrip("./")
+    except Exception:
+        icon = ""
+    with zipfile.ZipFile(path) as z:
+        names = z.namelist()
+        if icon and not icon.endswith(".xml"):
+            target = icon if icon in names else next((n for n in names if n.endswith("/" + icon.rsplit("/", 1)[-1])), "")
+            if target:
+                return z.read(target), _icon_ctype(target)
+        # 回退：mipmap 目录里挑最高密度且文件名含 launcher/icon 的图片
+        cands = [n for n in names if _ICON_CAND_PAT.match(n)]
+        def rank(n: str) -> tuple:
+            d = next((i for i, dk in enumerate(_ICON_DENSITY_RANK) if dk in n), len(_ICON_DENSITY_RANK))
+            kw = ("launcher" in n.lower()) + 0.5 * ("icon" in n.lower())
+            return (kw, -d)
+        if cands:
+            best = max(cands, key=rank)
+            return z.read(best), _icon_ctype(best)
+    raise StoreError("APK 中未找到应用图标")
 
 
 # ---------- AAB protobuf 最小解码 ----------

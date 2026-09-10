@@ -29,6 +29,9 @@ config/credentials.json
 # 本地应用目录（含真实包名/路径），GitHub 用 catalog.example.json
 apps/catalog.json
 
+# 应用图标本地缓存（分享图用，按 app_id 自动生成）
+apps/icons/
+
 # 本地构建产物（APK/AAB，体积大不入库）
 builds/
 

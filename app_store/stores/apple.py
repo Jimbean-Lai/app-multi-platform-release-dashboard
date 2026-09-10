@@ -38,7 +38,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..base import StoreAdapter, StoreError
 from ..models import AuditState, Platform, Release, SubmitResult, StoreStatus, utcnow_iso
@@ -102,6 +102,19 @@ class AppleAdapter(StoreAdapter):
         if data.get("resultCount") != 1 or not data.get("results"):
             raise StoreError(f"Apple 查询无结果: 包 {package_name!r} id {appid_!r}")
         return data["results"][0]
+
+    def fetch_icon(self, package_name: str) -> Tuple[bytes, str]:
+        """iTunes Lookup 的 artworkUrl 取应用图标（PNG），供分享图使用。"""
+        r0 = self._lookup(package_name)
+        url = r0.get("artworkUrl512") or r0.get("artworkUrl100") or r0.get("artworkUrl60") or ""
+        if not url:
+            raise StoreError("iTunes Lookup 无 artwork 字段")
+        req = urllib.request.Request(url, headers={"User-Agent": ""})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = resp.read()
+        if not data:
+            raise StoreError("artwork 下载为空")
+        return data, "image/png"
 
     def _parse_page_version(self, html: str) -> str:
         m = re.search(r'"primarySubtitle":"版本\s*([0-9]+(?:\.[0-9]+){1,3})"', html)

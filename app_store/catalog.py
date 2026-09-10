@@ -131,7 +131,7 @@ class AppCatalog:
     # ---- 更新 ----
     def update_app(self, app_id: str, fields: Dict[str, Any]) -> Dict[str, Any]:
         """更新目录中的应用字段（如 aab_build/apk_build/package_name/version_name），写回 JSON。"""
-        allowed = {"package_name", "aab_build", "apk_build", "latest_build", "version_name", "version_code", "track", "notes", "name", "online_time"}
+        allowed = {"package_name", "aab_build", "apk_build", "latest_build", "version_name", "version_code", "track", "notes", "name", "online_time", "icon"}
         unknown = set(fields) - allowed
         if unknown:
             raise StoreError(f"不支持的字段: {', '.join(sorted(unknown))}")
