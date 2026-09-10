@@ -36,21 +36,21 @@
 ```
 .
 ├── app_store/
-│ ├── cli.py # 命令行入口（publish/status/web...）
-│ ├── web.py # Web 看板服务器（stdlib http.server）
-│ ├── base.py # StoreAdapter 抽象基类
-│ ├── registry.py # 平台 -> 适配器注册表
-│ ├── config.py # 凭证 / 应用目录加载
-│ ├── catalog.py # 应用目录 → Release 模型
-│ ├── models.py # 统一数据模型（Platform/AuditState/...）
-│ ├── templates/
-│ │ └── index.html # Web 看板前端（单文件）
-│ └── stores/ # 各平台适配器
-│ ├── google.py / apple.py / xiaomi.py
-│ ├── oppo.py / vivo.py / honor.py / huawei.py
-├── apps/catalog.json # 应用目录（包名、构建产物路径、版本）
-├── config/ # 凭证（credentials.json 本地私有）
-└── docs/ # 文档
+│   ├── cli.py            # 命令行入口（publish/status/web...）
+│   ├── web.py            # Web 看板服务器（stdlib http.server）
+│   ├── base.py           # StoreAdapter 抽象基类
+│   ├── registry.py       # 平台 -> 适配器注册表
+│   ├── config.py         # 凭证 / 应用目录加载
+│   ├── catalog.py        # 应用目录 → Release 模型
+│   ├── models.py         # 统一数据模型（Platform/AuditState/...）
+│   ├── templates/
+│   │   └── index.html    # Web 看板前端（单文件）
+│   └── stores/           # 各平台适配器
+│       ├── google.py / apple.py / xiaomi.py
+│       ├── oppo.py / vivo.py / honor.py / huawei.py
+├── apps/catalog.json     # 应用目录（包名、构建产物路径、版本）
+├── config/               # 凭证（credentials.json 本地私有）
+└── docs/                 # 文档
 ```
 
 ## 快速开始
@@ -76,33 +76,33 @@ pip install -r requirements.txt
 
 ```json
 {
- "categories": [
- {
- "name": "示例分类",
- "apps": [
- {
- "id": "example-app",
- "name": "Example App",
- "package_name": "com.example.app",
- "apk_build": "/path/to/app-release.apk",
- "aab_build": "/path/to/app-release.aab",
- "version_name": "1.0.0",
- "version_code": 100,
- "track": "production",
- "release_notes": ""
- }
- ]
- }
- ]
+  "categories": [
+    {
+      "name": "示例分类",
+      "apps": [
+        {
+          "id": "example-app",
+          "name": "Example App",
+          "package_name": "com.example.app",
+          "apk_build": "/path/to/app-release.apk",
+          "aab_build": "/path/to/app-release.aab",
+          "version_name": "1.0.0",
+          "version_code": 100,
+          "track": "production",
+          "release_notes": ""
+        }
+      ]
+    }
+  ]
 }
 ```
 
 ### 4. 校验配置
 
 ```bash
-appstore platforms # 列出平台与状态
+appstore platforms                          # 列出平台与状态
 appstore validate --credentials config/credentials.json
-appstore apps # 查看应用目录
+appstore apps                               # 查看应用目录
 ```
 
 ### 5. 启动 Web 看板（推荐日常使用）
