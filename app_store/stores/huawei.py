@@ -182,9 +182,11 @@ class HuaweiAdapter(StoreAdapter):
                     hnames = [str(n) + "（Harmony）" for n in hs.live_version_names]
                     s.live_version_names = android_names + hnames
                     s.live_version_codes = list(s.live_version_codes) + list(hs.live_version_codes)
-                    # 审核中/待发布版本（标注平台）
-                    s.reviewing_version_names = list(s.reviewing_version_names) + list(hs.reviewing_version_names)
-                    s.draft_version_names = list(s.draft_version_names) + list(hs.draft_version_names)
+                    # 审核中/草稿版本（标注平台，与已上架版本一致）
+                    s.reviewing_version_names = ([str(n) + "（Android）" for n in s.reviewing_version_names]
+                                                 + [str(n) + "（Harmony）" for n in hs.reviewing_version_names])
+                    s.draft_version_names = ([str(n) + "（Android）" for n in s.draft_version_names]
+                                             + [str(n) + "（Harmony）" for n in hs.draft_version_names])
                     # 审核状态文字（两平台都保留，标注平台）
                     notes = []
                     if s.audit_note:
