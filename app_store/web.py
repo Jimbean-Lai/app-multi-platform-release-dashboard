@@ -226,8 +226,10 @@ def _new_task(app_id, platform, dry_run, apk_path="", aab_path=""):
         _TASKS[tid] = {
             "id": tid, "app_id": app_id, "platform": platform, "dry_run": dry_run,
             "status": "running", "progress": 0, "stage": "准备中",
-            "steps": [], "results": None, "errors": None,
+            "steps": [], "results": [], "errors": [],
             "upload": None,
+            # 并行发布：按平台分组的步骤/状态/上传进度（前端点击芯片切换查看）
+            "psteps": {}, "pstate": {}, "uploads": {},
         }
         _PENDING_PATHS[tid] = {"apk": apk_path, "aab": aab_path}
     return tid
@@ -250,6 +252,45 @@ def _update(tid, **kw):
     # _save_history 有自己的锁，在外部调用避免死锁
     if kw.get("status") in ("done", "error", "killed"):
         _save_history()
+
+
+def _pstep(tid: str, plat: str, msg: str, level: str = "info"):
+    """按平台分组的步骤日志（并行发布时前端切换查看对应平台）。"""
+    ts = _tm.strftime("%H:%M:%S")
+    with _task_lock:
+        t = _TASKS.get(tid)
+        if t is not None:
+            t.setdefault("psteps", {}).setdefault(plat, []).append(f"[{ts}] {msg}")
+
+
+def _pstate(tid: str, plat: str, st: str):
+    """平台级状态：pending / running / done / error。"""
+    with _task_lock:
+        t = _TASKS.get(tid)
+        if t is not None:
+            t.setdefault("pstate", {})[plat] = st
+
+
+def _pupload(tid: str, plat: str, sent: int, total: int):
+    """按平台的上传字节进度。"""
+    with _task_lock:
+        t = _TASKS.get(tid)
+        if t is not None:
+            t.setdefault("uploads", {})[plat] = {
+                "sent": sent, "total": total, "pct": f"{100*sent/(total or 1):.0f}%"}
+
+
+def _record_error(tid: str, plat: str, targets, msg: str):
+    """平台线程失败：记录错误 + 推进整体进度（锁外再写状态，Lock 不可重入）。"""
+    with _task_lock:
+        t = _TASKS.get(tid)
+        if t is not None:
+            t.setdefault("errors", []).append({"platform": plat, "error": msg})
+            done_n = len(t.get("results") or []) + len(t.get("errors") or [])
+            t["progress"] = min(95, 15 + int(75 * done_n / max(1, len(targets))))
+    _pstate(tid, plat, "error")
+    _step(tid, f"  {plat}: 错误 {msg}", "error")
+    _pstep(tid, plat, f"错误 {msg}", "error")
 
 
 def _publish_worker(tid: str):
@@ -292,32 +333,62 @@ def _publish_worker(tid: str):
             targets = [platform] if platform in PUBLISH_PLATFORMS else [p for p in [platform] if p in creds]
             display = platform
         _step(tid, f"目标平台: {display}")
-        results, errors = [], []
-        for i, key in enumerate(targets):
-            _update(tid, stage=f"发布 {key} ({(i+1)}/{len(targets)})", progress=15)
+        # 回写解析后的平台列表（"all" 时前端芯片/标题能显示具体平台）
+        _update(tid, platform=",".join(targets))
+        # 并行发布：每个平台一个线程同时执行各自的发布流程，互不阻塞
+        with _task_lock:
+            if tid in _TASKS:
+                _TASKS[tid]["psteps"] = {k: [] for k in targets}
+                _TASKS[tid]["pstate"] = {k: "pending" for k in targets}
+                _TASKS[tid]["uploads"] = {}
+        _update(tid, progress=15, stage="并行发布中" if len(targets) > 1 else (f"发布 {targets[0]}" if targets else "无目标平台"))
+
+        import copy as _copy
+        from concurrent.futures import ThreadPoolExecutor
+
+        def _run_one(key: str):
+            # 每平台独立 Release 副本：上传进度/步骤回调互不覆盖（共享对象在并行下会竞争）
+            rel = _copy.deepcopy(release)
+            _pstate(tid, key, "running")
             _step(tid, f"→ {key}: 开始")
+            _pstep(tid, key, "开始发布")
             try:
                 adapter = get_adapter(key, creds)
                 problems = adapter.check()
                 if problems:
                     raise StoreError("；".join(problems))
                 _step(tid, f"  {key}: 凭证校验通过")
-                # 注入上传进度回调（只更新 upload 字段，不碰 stage，避免重复显示）
-                release.metadata["_progress_cb"] = lambda sent, total: _update(
-                    tid, upload={"sent": sent, "total": total, "pct": f"{100*sent/(total or 1):.0f}%"},
-                )
-                # 步骤回调：适配器在传包开始/完成时追加步骤（前端 ✓/⚡ 指示）
-                release.metadata["_step_cb"] = lambda msg: _step(tid, f"  {key}: {msg}")
-                res = adapter.publish(release, dry_run=dry_run)
-                ok = res.ok
-                results.append({"platform": key, "ok": ok, "message": res.message, "remote_reference": res.remote_reference, "state": res.state.value})
+                _pstep(tid, key, "凭证校验通过")
+                # 上传进度/步骤回调：写入按平台分组的字段（前端按选中平台展示）
+                rel.metadata["_progress_cb"] = lambda sent, total: _pupload(tid, key, sent, total)
+                rel.metadata["_step_cb"] = lambda msg: (_pstep(tid, key, msg), _step(tid, f"  {key}: {msg}"))
+                res = adapter.publish(rel, dry_run=dry_run)
+                ok = bool(res.ok)
+                item = {"platform": key, "ok": ok, "message": res.message,
+                        "remote_reference": res.remote_reference, "state": res.state.value}
+                with _task_lock:
+                    t = _TASKS.get(tid)
+                    if t is not None:
+                        t.setdefault("results", []).append(item)
+                        done_n = len(t.get("results") or []) + len(t.get("errors") or [])
+                        t["progress"] = min(95, 15 + int(75 * done_n / max(1, len(targets))))
+                _pstate(tid, key, "done" if ok else "error")
                 _step(tid, f"  {key}: {'完成' if ok else '失败'} - {res.message}", "ok" if ok else "error")
+                _pstep(tid, key, f"{'完成' if ok else '失败'} - {res.message}", "ok" if ok else "error")
             except StoreError as e:
-                errors.append({"platform": key, "error": str(e)})
-                _step(tid, f"  {key}: 错误 {e}", "error")
-            prog = min(95, 15 + int(75 * (i + 1) / len(targets)))
-            # 增量写入 results/errors，让前端每平台完成时立即看到 ✓/✗
-            _update(tid, progress=prog, results=list(results), errors=list(errors))
+                _record_error(tid, key, targets, str(e))
+            except Exception as e:  # 线程内兜底，单平台异常不影响其他平台线程
+                _record_error(tid, key, targets, f"异常: {e}")
+
+        if targets:
+            with ThreadPoolExecutor(max_workers=len(targets)) as pool:
+                futures = [pool.submit(_run_one, key) for key in targets]
+                for f in futures:
+                    f.result()  # 等全部平台结束后再汇总
+        with _task_lock:
+            t = _TASKS.get(tid) or {}
+            results = list(t.get("results") or [])
+            errors = list(t.get("errors") or [])
         _update(tid, status="done", progress=100, stage="全部完成" if not errors else "有错误",
                 results=results, errors=errors)
         if errors:
@@ -364,17 +435,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self._api_files()
             if path.startswith("/api/tasks/"):
                 tid = path.split("/")[-1]
+                import copy as _c
                 with _task_lock:
-                    task = _TASKS.get(tid, {"error": "not found"})
+                    # 并行发布时工作线程会持续 append 各平台字段，必须快照后再序列化
+                    task = _c.deepcopy(_TASKS.get(tid, {"error": "not found"}))
                 return _json_response(self, task)
             if path == "/api/tasks":
+                import copy as _c2
                 with _task_lock:
-                    running = {k: v for k, v in _TASKS.items() if v.get("status") in ("running",)}
-                    history = [
-                        v for k, v in _TASKS.items() if v.get("status") in ("done", "error", "killed")
-                    ]
+                    running = [_c2.deepcopy(v) for v in _TASKS.values() if v.get("status") in ("running",)]
+                    history = [_c2.deepcopy(v) for v in _TASKS.values() if v.get("status") in ("done", "error", "killed")]
                 history.sort(key=lambda x: x.get("finished_at", ""), reverse=True)
-                return _json_response(self, {"running": list(running.values()), "history": history[:_HISTORY_MAX]})
+                return _json_response(self, {"running": running, "history": history[:_HISTORY_MAX]})
             return _json_response(self, {"error": "not found"}, 404)
         except Exception as e:
             return _json_response(self, {"error": str(e)}, 500)

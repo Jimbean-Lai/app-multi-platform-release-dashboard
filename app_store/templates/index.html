@@ -90,10 +90,12 @@ label{display:block;color:var(--mut);font-size:11px;margin:8px 0 3px}
 #tinfo{font-size:14px;font-weight:600;margin-bottom:4px}
 #tstage{font-size:12.5px;color:var(--acc);margin:4px 0}
 #tmeta{display:flex;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--mut);margin-bottom:4px}
-#tmeta .tchip{background:var(--chip-bg);border-radius:12px;padding:2px 10px;display:inline-flex;align-items:center;gap:4px}
+#tmeta .tchip{background:var(--chip-bg);border-radius:12px;padding:2px 10px;display:inline-flex;align-items:center;gap:4px;cursor:pointer;user-select:none;border:1px solid transparent;transition:box-shadow .15s,border-color .15s}
+#tmeta .tchip:hover{border-color:var(--acc)}
 #tmeta .tchip.ok{background:var(--tint-ok);color:var(--ok)}
 #tmeta .tchip.err{background:var(--tint-err);color:var(--err)}
 #tmeta .tchip.run{background:var(--tint-blue);color:var(--pending-txt)}
+#tmeta .tchip.sel{box-shadow:0 0 0 2px var(--acc);border-color:var(--acc)}
 .overlay{position:fixed;inset:0;background:var(--ov-bg);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:60}
 .modal{background:var(--panel);border:1px solid var(--modal-border);border-radius:14px;padding:18px;min-width:380px;max-width:90vw;max-height:70vh;overflow-y:auto;box-shadow:var(--modal-shadow)}
 .file-item{padding:8px 6px;border-bottom:1px dashed var(--line);cursor:pointer;display:flex;justify-content:space-between;gap:12px;font-size:12.5px}
@@ -203,36 +205,43 @@ function dpub(){var a=ST.cur;if(!a||!a.package_name){toast("请选择应用（�
 var ab_in=$("paab").value.trim(),ap_in=$("papk").value.trim();
 var body={app_id:a.id,platform:selPlats(),dry_run:$("ipdry").checked,auto_review:$("ipauto").checked,version_name:$("ipvn").value.trim(),version_code:parseInt($("ipvc").value)||null,release_notes:$("ipn").value.trim(),track:$("ipv").value,aab_path:(ab_in||a.aab_build||""),apk_path:(ap_in||a.apk_build||""),online_time:document.getElementById("pot")?document.getElementById("pot").value.trim():""};
 lg("== "+(body.dry_run?"Dry-run":"正式")+"发布 "+(a.name||a.id)+" ==");busy(true);api("/api/publish",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(function(r){if(r.task_id){lg("任务: "+r.task_id);startPoll(r.task_id)}else{lg("启动失败: "+JSON.stringify(r),"err");busy(false)}})}
-function startPoll(tid){ST.POLL=tid;$("progress").classList.remove("hide");$("tsteps").innerHTML="";poll()}
-function poll(){if(!ST.POLL)return;api("/api/tasks/"+ST.POLL).then(function(t){if(t.error){lg("查询失败","err");stopPoll();return}
+function renderTask(t){ST.LASTT=t;
 var a=(ST.apps||[]).find(function(z){return z.id===t.app_id})||{};
 $("tinfo").textContent=esc(a.name||t.app_id)+" → "+esc(t.platform)+(t.dry_run?" ⚡dry-run":"");
-// === 平台芯片：✓完成/✗失败/⚡进行中/灰色待处理 ===
+// === 平台芯片：点击切换查看对应平台详情（选中加阴影边框）；✓完成/✗失败/⚡进行中 ===
 var doneMap={},errMap={};(t.results||[]).forEach(function(v){doneMap[v.platform]=v});
 (t.errors||[]).forEach(function(v){errMap[v.platform]=v});
-var targets=(t.platform||"").split(",").map(function(s){return s.trim()});
-var curPlat=(t.stage||"").match(/发布\s+(\S+)/);curPlat=curPlat?curPlat[1]:"";
-var ps=targets.map(function(p){if(!p)return "";
-  if(doneMap[p]){var v=doneMap[p];return '<span class="tchip'+(v.ok?' ok':' err')+'">'+esc(p)+(v.ok?' ✓':' ✗')+'</span>'}
-  if(errMap[p])return '<span class="tchip err">'+esc(p)+' ✗</span>';
-  if(p===curPlat)return '<span class="tchip run">'+esc(p)+' ⚡</span>';
-  return '<span class="tchip">'+esc(p)+'</span>';
-}).filter(Boolean);
-$("tmeta").innerHTML=ps.join("");
-// === 当前阶段（进度条已移除，以文字/步骤图标表达）===
+var pst=t.pstate||{},sel=ST.TSEL;
+var targets=(t.platform||"").split(",").map(function(s){return s.trim()}).filter(Boolean);
+$("tmeta").innerHTML=targets.map(function(p){
+  var cls="tchip",mark="";
+  if(doneMap[p]){cls+=doneMap[p].ok?" ok":" err";mark=doneMap[p].ok?" ✓":" ✗"}
+  else if(errMap[p]){cls+=" err";mark=" ✗"}
+  else if(pst[p]==="running"){cls+=" run";mark=" ⚡"}
+  if(sel===p)cls+=" sel";
+  return '<span class="'+cls+'" onclick="selTPlat(\''+esc(p)+'\')">'+esc(p)+mark+"</span>"}).join("");
+// === 当前阶段：选中平台显示其状态，否则显示整体 ===
 if(t.status==="done"){$("tstage").textContent="✅ 全部完成"}
 else if(t.status==="error"){$("tstage").textContent="❌ 有错误"}
+else if(sel){var st2=pst[sel];$("tstage").textContent=st2==="done"?"✅ "+sel+" 完成":st2==="error"?"❌ "+sel+" 失败":"⚡ "+sel+" 发布中"}
 else{$("tstage").textContent=t.stage||"处理中…"}
-// === 上传字节进度（若有）===
-var upEl=$("tup");if(upEl){var up=t.upload;if(up&&up.sent!=null){var mb1=(up.sent/1048576).toFixed(1),mb2=(up.total/1048576).toFixed(1);upEl.textContent="⬆ 上传中 "+mb1+"MB / "+mb2+"MB ("+up.pct+")"}else if(t.status==="done"||t.status==="error"){upEl.textContent="";}}
-// === 步骤列表：已完成✓ / 当前⚡ / 最终✓✗ ===
-var se=$("tsteps");if(t.steps&&t.steps.length>se.childNodes.length){var sl=t.steps,li=sl.length-1;
+// === 上传字节进度：跟随选中平台（未选中时兼容旧任务单一 upload 字段）===
+var upEl=$("tup");if(upEl){var up=null;
+if(sel&&t.uploads&&t.uploads[sel])up=t.uploads[sel];else if(!sel&&t.upload)up=t.upload;
+if(up&&up.sent!=null){var mb1=(up.sent/1048576).toFixed(1),mb2=(up.total/1048576).toFixed(1);upEl.textContent="⬆ 上传中 "+mb1+"MB / "+mb2+"MB ("+up.pct+")"}else if(t.status==="done"||t.status==="error"){upEl.textContent="";}}
+// === 步骤列表：选中平台显示其专属步骤，否则显示合并日志；✓已完成/⚡当前/✗失败 ===
+var sl=(sel&&t.psteps&&t.psteps[sel])?t.psteps[sel]:(t.steps||[]);
+var se=$("tsteps");var li=sl.length-1;
 se.innerHTML=sl.map(function(s,i){var icon,cls;
   if(t.status==="running"){icon=i<li?"✓":"⚡";cls=i<li?"ok":"cur";}
   else if(t.status==="done"){icon="✓";cls="ok";}
   else{icon=i<li?"✓":"✗";cls=i<li?"ok":"err";}
   return '<div><span class="icn '+cls+'">'+icon+'</span>'+esc(s)+"</div>"
 }).join("");se.scrollTop=se.scrollHeight}
+function startPoll(tid){ST.POLL=tid;ST.TSEL="";ST.LASTT=null;$("progress").classList.remove("hide");$("tsteps").innerHTML="";poll()}
+function selTPlat(p){ST.TSEL=(ST.TSEL===p?"":p);if(ST.LASTT)renderTask(ST.LASTT)}
+function poll(){if(!ST.POLL)return;api("/api/tasks/"+ST.POLL).then(function(t){if(t.error){lg("查询失败","err");stopPoll();return}
+renderTask(t)
 // === 任务结束：日志 + 手动关闭 × ===
 if(t.status==="done"||t.status==="error"){var isOk=t.status==="done";
 $("tclose").style.display="inline-block";$("tclose").onclick=function(){stopPoll()};
