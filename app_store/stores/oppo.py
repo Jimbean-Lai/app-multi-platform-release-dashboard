@@ -248,10 +248,12 @@ class OPPOAdapter(StoreAdapter):
             state = AuditState.DRAFT
 
         # 已上架版本：仅 state=PUBLISHED 时当前版本才是线上
-        # 审核中/待发布版本：非已上架时当前版本
+        # 版本归类按真实审核状态：仅"审核中"才进 reviewing；
+        # 待发布(PENDING)/审核拒绝由审核状态文字表达，草稿进 draft（不再误标"审核中"）
         live_names = [str(version)] if version and state == AuditState.PUBLISHED else []
         live_codes = [int(vcode)] if vcode and state == AuditState.PUBLISHED else []
-        reviewing_names = [str(version)] if version and state != AuditState.PUBLISHED else []
+        reviewing_names = [str(version)] if version and state == AuditState.REVIEWING else []
+        draft_names = [str(version)] if version and state == AuditState.DRAFT else []
 
         # 审核状态文字（标准化；待发布已由右上角徽章表达，此处不带"待发布"字样）
         note = ""
@@ -277,6 +279,7 @@ class OPPOAdapter(StoreAdapter):
                            live_version_names=live_names,
                            live_version_codes=live_codes,
                            reviewing_version_names=reviewing_names,
+                           draft_version_names=draft_names,
                            audit_note=note,
                            review_message=audit_name or "",
                            raw=payload, checked_at=utcnow_iso())

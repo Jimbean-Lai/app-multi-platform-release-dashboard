@@ -296,8 +296,11 @@ class HonorAdapter(StoreAdapter):
             state = AuditState.REJECTED
 
         # 已上架 vs 审核中/待发布分离
+        # 版本归类按真实审核状态：仅"审核中"才进 reviewing；
+        # 待发布/审核拒绝由审核状态文字表达，草稿进 draft（不再误标"审核中"）
         live_names = [str(version)] if version and state == AuditState.PUBLISHED else []
-        reviewing_names = [str(version)] if version and state != AuditState.PUBLISHED else []
+        reviewing_names = [str(version)] if version and state == AuditState.REVIEWING else []
+        draft_names = [str(version)] if version and state == AuditState.DRAFT else []
 
         # 审核状态文字（标准化，剥离 HTML）
         note = ""
@@ -324,6 +327,7 @@ class HonorAdapter(StoreAdapter):
             live_version_names=live_names,
             live_version_codes=[int(vcode)] if str(vcode).isdigit() and state == AuditState.PUBLISHED else [],
             reviewing_version_names=reviewing_names,
+            draft_version_names=draft_names,
             audit_note=note,
             review_message="；".join(msgs),
             raw=d, checked_at=utcnow_iso(),
