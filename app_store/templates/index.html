@@ -192,7 +192,8 @@ if($("ipvc"))$("ipvc").value=(r.version_code==null?($("ipvc").value||""):r.versi
 var fields={app_id:appId};if(type==="aab")fields.aab_build=path;else fields.apk_build=path;
 if(r.version_name)fields.version_name=r.version_name;
 if(r.version_code!=null)fields.version_code=r.version_code;
-api("/api/apps/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(fields)}).then(function(r){lg("已保存 "+(type==="aab"?"AAB":"APK")+" 路径与版本","ok");var cp=(r&&r.cleanup)||null;if(cp&&cp.removed&&cp.removed.length){var mb=(cp.freed/1048576).toFixed(1);lg("已自动清理 "+cp.removed.length+" 个未引用旧包, 释放 "+mb+"MB","ok");toast("清理了 "+cp.removed.length+" 个旧包 ("+mb+"MB)")}if(ST.cur&&ST.cur.id===appId){
+api("/api/apps/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(fields)}).then(function(ur){lg("已保存 "+(type==="aab"?"AAB":"APK")+" 路径与版本","ok");var cp=(ur&&ur.cleanup)||null;if(cp&&cp.removed&&cp.removed.length){var mb=(cp.freed/1048576).toFixed(1);lg("已自动清理 "+cp.removed.length+" 个未引用旧包, 释放 "+mb+"MB","ok");toast("清理了 "+cp.removed.length+" 个旧包 ("+mb+"MB)")}if(ST.cur&&ST.cur.id===appId){
+// 注意: r 是外层 APK 解析结果(含 version_name/version_code); ur 是本次 update 响应(含 cleanup)
 ST.cur.version_name=r.version_name||ST.cur.version_name;ST.cur.version_code=(r.version_code!=null?r.version_code:ST.cur.version_code);
 // 就地更新应用信息显示（不整卡重渲染，避免打断其他操作）
 if(r.version_name){var sp=document.querySelector('#appc .app-head .muted');if(sp)sp.textContent="v"+r.version_name}
