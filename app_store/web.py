@@ -16,6 +16,7 @@ import json
 import os
 import re
 import threading
+import time
 import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -112,6 +113,47 @@ def _play_store_icon(package_name: str) -> tuple:
     if not m:
         raise StoreError("Play 商店页未找到图标 URL")
     return _http_get_bytes(m.group(0))
+
+
+_BUILDS_GRACE_SECS = 24 * 3600  # 刚上传尚未绑定的文件保护期
+
+
+def _cleanup_unreferenced_builds(catalog) -> Dict[str, Any]:
+    """删除 builds/{apk,aab}/ 下未被任何应用引用的安装包。
+
+    只扫 builds/ 两个子目录（catalog 里可能引用 Downloads 等外部路径，绝不碰）；
+    修改时间在保护期内的文件跳过（刚上传、尚未绑定到应用的新包不误删）。
+    任何失败只跳过该文件，不影响调用方。
+    """
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    builds_root = os.path.join(root, "builds")
+    refs = set()
+    for a in catalog.all_apps():
+        for f in ("apk_build", "aab_build"):
+            v = str(a.get(f) or "").strip()
+            if v:
+                refs.add(os.path.normpath(v if os.path.isabs(v) else os.path.join(root, v)))
+    removed, freed = [], 0
+    now = time.time()
+    for sub in ("apk", "aab"):
+        d = os.path.join(builds_root, sub)
+        if not os.path.isdir(d):
+            continue
+        for fn in os.listdir(d):
+            if not fn.lower().endswith("." + sub):
+                continue
+            p = os.path.normpath(os.path.join(d, fn))
+            if p in refs:
+                continue
+            try:
+                if now - os.path.getmtime(p) < _BUILDS_GRACE_SECS:
+                    continue  # 保护期内的新文件
+                freed += os.path.getsize(p)
+                os.remove(p)
+                removed.append(fn)
+            except OSError:
+                pass
+    return {"removed": removed, "freed": freed}
 
 
 def _read_body(handler: BaseHTTPRequestHandler) -> Dict[str, Any]:
@@ -443,7 +485,14 @@ class Handler(BaseHTTPRequestHandler):
         fields = {k: v for k, v in body.items() if k != "app_id"}
         catalog = self._catalog()
         catalog.update_app(app_id, fields)
-        return _json_response(self, {"ok": True, "app": catalog.status_payload(app_id)})
+        # 绑定/更换安装包时，自动回收 builds/ 下未被任何应用引用的旧包
+        cleanup = None
+        if "apk_build" in fields or "aab_build" in fields:
+            try:
+                cleanup = _cleanup_unreferenced_builds(catalog)
+            except Exception:
+                cleanup = None
+        return _json_response(self, {"ok": True, "app": catalog.status_payload(app_id), "cleanup": cleanup})
 
     def _api_apk_meta(self, body: Dict[str, Any]):
         """解析 APK 元数据（package/versionName/versionCode/label）。"""
