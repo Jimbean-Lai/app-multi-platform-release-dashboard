@@ -184,6 +184,7 @@ class HuaweiAdapter(StoreAdapter):
                     s.live_version_codes = list(s.live_version_codes) + list(hs.live_version_codes)
                     # 审核中/待发布版本（标注平台）
                     s.reviewing_version_names = list(s.reviewing_version_names) + list(hs.reviewing_version_names)
+                    s.draft_version_names = list(s.draft_version_names) + list(hs.draft_version_names)
                     # 审核状态文字（两平台都保留，标注平台）
                     notes = []
                     if s.audit_note:
@@ -232,16 +233,21 @@ class HuaweiAdapter(StoreAdapter):
         # 已上架版本
         live_names = [str(live_version)] if live_version else []
         live_codes = [int(live_vcode)] if live_vcode else []
-        # 审核中版本
+        # 版本归类按 releaseState：仅真正"审核中"(4/5/12)才进 reviewing；
+        # 待上架(3)/拒绝(1,8)的版本由 audit_note 文字表达（不再误标"审核中"），草稿(7)进 draft
         reviewing_names = []
+        draft_names = []
         if curr_version and curr_version != live_version:
-            reviewing_names = [str(curr_version)]
+            if release_state in (4, 5, 12):
+                reviewing_names = [str(curr_version)]
+            elif release_state == 7:
+                draft_names = [str(curr_version)]
         # 审核状态文字（标准化）
         note = ""
         if release_state in (4, 5, 12):
             note = f"{curr_version} 审核中" if curr_version else "审核中"
         elif release_state in (1, 8):
-            note = "审核未通过"
+            note = f"{curr_version} 审核未通过" if curr_version else "审核未通过"
         elif release_state == 3:
             note = f"{curr_version} 审核通过" if curr_version else "审核通过"
         elif release_state == 0:
@@ -250,6 +256,7 @@ class HuaweiAdapter(StoreAdapter):
             self.platform, pkg, state,
             live_version_names=live_names, live_version_codes=live_codes,
             reviewing_version_names=reviewing_names,
+            draft_version_names=draft_names,
             audit_note=note,
             review_message=f"releaseState={release_state}",
             raw=dd, checked_at=utcnow_iso(),
@@ -277,12 +284,19 @@ class HuaweiAdapter(StoreAdapter):
             state = AuditState.DRAFT
         else:
             state = AuditState.UNKNOWN
-        reviewing_names = [str(curr_version)] if curr_version and curr_version != live_version else []
+        # 同 _query_android：仅真正"审核中"才进 reviewing，草稿进 draft，其余由 note 表达
+        reviewing_names = []
+        draft_names = []
+        if curr_version and curr_version != live_version:
+            if release_state in (4, 5, 12):
+                reviewing_names = [str(curr_version)]
+            elif release_state == 7:
+                draft_names = [str(curr_version)]
         note = ""
         if release_state in (4, 5, 12):
             note = f"{curr_version} 审核中" if curr_version else "审核中"
         elif release_state in (1, 8):
-            note = "审核未通过"
+            note = f"{curr_version} 审核未通过" if curr_version else "审核未通过"
         elif release_state == 3:
             note = f"{curr_version} 审核通过" if curr_version else "审核通过"
         elif release_state == 0:
@@ -291,6 +305,7 @@ class HuaweiAdapter(StoreAdapter):
             self.platform, pkg, state,
             live_version_names=live_names, live_version_codes=codes,
             reviewing_version_names=reviewing_names,
+            draft_version_names=draft_names,
             audit_note=note,
             review_message=f"releaseState={release_state}",
             raw=dd, checked_at=utcnow_iso(),
